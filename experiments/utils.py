@@ -28,14 +28,12 @@ class MyDataset(torch.utils.data.Dataset):
         return self.X[index], self.y[index]
 
 
-
-
 ######################################################
 # Helper functions
 ######################################################
 def make_dataset(model, n, sigma=0.1):
     uniform_dist = Uniform(torch.tensor([-1.0]), torch.tensor([1.0]))
-    X = uniform_dist.sample([n])    
+    X = uniform_dist.sample([n])
     y = model(X)
     normal_dist = Normal(0.0, sigma)
     noise = normal_dist.sample(y.shape)
@@ -61,7 +59,7 @@ def train(dataloader, model, loss_fn, optimiser, device="cpu"):
     return
 
 
-def test(dataloader, model, loss_fn):
+def test(dataloader, model, loss_fn, device):
     size = len(dataloader.dataset)
     num_batches = len(dataloader)
     model.eval()
