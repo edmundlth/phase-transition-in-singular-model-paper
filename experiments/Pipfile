@@ -11,6 +11,7 @@ pandas = "*"
 seaborn = "*"
 torch = "*"
 torchvision = "*"
+pyro-ppl = "*"
 
 [dev-packages]
 
