@@ -11,8 +11,15 @@ pandas = "*"
 seaborn = "*"
 torch = "*"
 torchvision = "*"
+scipy = "*"
+corner = "*"
+cython = "*"
+ultranest = "*"
+pymc = "*"
+numpyro = "*"
+arviz = "*"
 
 [dev-packages]
 
 [requires]
-python_version = "3.9"
+python_version = "3.8"
