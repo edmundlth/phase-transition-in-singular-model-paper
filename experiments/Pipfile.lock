@@ -1262,6 +1262,21 @@
             "markers": "python_full_version >= '3.6.8'",
             "version": "==3.0.9"
         },
+        "pyro-api": {
+            "hashes": [
+                "sha256:10e0e42e9e4401ce464dab79c870e50dfb4f413d326fa777f3582928ef9caf8f",
+                "sha256:a1b900d9580aa1c2fab3b123ab7ff33413744da7c5f440bd4aadc4d40d14d920"
+            ],
+            "version": "==0.1.2"
+        },
+        "pyro-ppl": {
+            "hashes": [
+                "sha256:ca01ab4565eb9a1af4a60dbc481da5cb6f5fe5a72efa19e83638e03683efbca6",
+                "sha256:d7c049eb2e7485a612b4dd99c24c309cc860c7cbc6b1973387034f5436d1c8d6"
+            ],
+            "index": "pypi",
+            "version": "==1.8.1"
+        },
         "pyrsistent": {
             "hashes": [
                 "sha256:055ab45d5911d7cae397dc418808d8802fb95262751872c841c170b0dbf51eed",
