@@ -8,6 +8,25 @@ from torchvision.transforms import ToTensor
 from torch.distributions.uniform import Uniform
 from torch.distributions.normal import Normal
 
+class EarlyStopping(object):
+    def __init__(self, patience=5, epsilon=1e-4):
+        self.patience = patience
+        self.epsilon = epsilon
+        self.history = []
+        
+        
+    def early_stopping_by_train_loss_improvement(self, machine):
+        with torch.no_grad():
+            current_step_count = max(machine.history.keys())
+            machine_history = machine.history[current_step_count]
+            current_epoch = machine_history["epoch"]
+            train_loss = machine_history["train_loss"].item()
+            self.history.append(train_loss)
+            if len(self.history) > self.patience and np.mean(np.abs(np.diff(self.history[-self.patience:]))) < self.epsilon:
+                print(f"Stopping at: {current_step_count} (epoch: {current_epoch}).")
+                return True
+            return False
+
 ######################################################
 # Pytorch Dataset
 ######################################################
@@ -16,15 +35,13 @@ from torch.distributions.normal import Normal
 class MyDataset(torch.utils.data.Dataset):
     def __init__(self, X, y):
         super(MyDataset, self).__init__()
-
         self.X = X
         self.y = y
-
+    
     def __len__(self):
         return len(self.X)
-
+    
     def __getitem__(self, index):
-        index = torch.randperm(len(self.X))[index]
         return self.X[index], self.y[index]
 
 
