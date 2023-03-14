@@ -20,6 +20,7 @@ numpyro = "*"
 arviz = "*"
 torchensemble = "*"
 emcee = "*"
+jax = {extras = ["cpu"], version = "*"}
 
 [dev-packages]
 
