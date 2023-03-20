@@ -156,7 +156,7 @@ if __name__ == "__main__":
     assert numpyro.__version__.startswith("0.11.0")
     parser = argparse.ArgumentParser(description="2dim tanh RLCT a*tanh(bx)")
     parser.add_argument("--num-samples", nargs="?", default=2000, type=int)
-    parser.add_argument("--thinning", nargs="?", default=0, type=int)
+    parser.add_argument("--thinning", nargs="?", default=1, type=int)
     parser.add_argument("--num-warmup", nargs="?", default=1000, type=int)
     parser.add_argument("--num-chains", nargs="?", default=1, type=int)
     parser.add_argument("--num-data", nargs="?", default=1032, type=int)
