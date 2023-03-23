@@ -30,12 +30,13 @@ import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS
 from scipy import stats
 
-matplotlib.use("Agg")  # noqa: E402
+# matplotlib.use("Agg")  # noqa: E402
 
 
 # the non-linearity we use in our neural network
 def nonlin(x):
     return jnp.tanh(x)
+
 
 def expected_nll(X, Y, param_dict, sigma_obs):
     w1 = param_dict["w1"]
@@ -52,7 +53,7 @@ def expected_nll(X, Y, param_dict, sigma_obs):
 # a two-layer bayesian neural network with computational flow
 # given by D_X => D_H => D_H => D_Y where D_H is the number of
 # hidden units. (note we indicate tensor dimensions in the comments)
-def model(X, Y, D_H, itemp, D_Y=1):
+def model(X, Y, D_H, itemp, sigma_obs, D_Y=1):
     N, D_X = X.shape
 
     # sample first layer (we put unit normal priors on all weights)
@@ -77,8 +78,8 @@ def model(X, Y, D_H, itemp, D_Y=1):
         assert z3.shape == Y.shape
 
     # we put a prior on the observation noise
-    prec_obs = numpyro.sample("prec_obs", dist.Gamma(3.0, 1.0))
-    sigma_obs = 1.0 / jnp.sqrt(prec_obs)
+    # prec_obs = numpyro.sample("prec_obs", dist.Gamma(3.0, 1.0))
+    # sigma_obs = 1.0 / jnp.sqrt(prec_obs)
 
     # observe data
     with numpyro.plate("data", N):
@@ -97,7 +98,7 @@ def run_inference(model, args, rng_key, X, Y, D_H, itemp):
         num_chains=args.num_chains,
         progress_bar=False if "NUMPYRO_SPHINXBUILD" in os.environ else True,
     )
-    mcmc.run(rng_key, X, Y, D_H, itemp)
+    mcmc.run(rng_key, X, Y, D_H, itemp, args.sigma_obs)
     mcmc.print_summary()
     print("\nMCMC elapsed time:", time.time() - start)
     return mcmc.get_samples()
@@ -152,7 +153,9 @@ def main(args):
 
         posterior_samples = run_inference(model, args, rng_key, X, Y, D_H, itemp)
         nlls = []
-        for i in range(args.num_samples):
+
+        num_mcmc_samples = len(posterior_samples[list(posterior_samples.keys())[0]])
+        for i in range(num_mcmc_samples):
             param_dict = {name: param[i] for name, param in posterior_samples.items()}
             nlls.append(expected_nll(X, Y, param_dict, args.sigma_obs))
 
@@ -207,10 +210,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Bayesian neural network example")
     parser.add_argument("-n", "--num-samples", nargs="?", default=2000, type=int)
     parser.add_argument("--num-warmup", nargs="?", default=1000, type=int)
-    parser.add_argument("--num-chains", nargs="?", default=10, type=int)
+    parser.add_argument("--num-chains", nargs="?", default=9, type=int)
     parser.add_argument("--num-data", nargs="?", default=5000, type=int)
     parser.add_argument("--num-hidden", nargs="?", default=5, type=int)
-    parser.add_argument("--sigma-obs", nargs="?", default=0.1, type=float)
+    parser.add_argument("--sigma-obs", nargs="?", default=0.1, type=float) # larger values give bad RLCT estimates
     parser.add_argument("--device", default="cpu", type=str, help='use "cpu" or "gpu".')
     args = parser.parse_args()
 
