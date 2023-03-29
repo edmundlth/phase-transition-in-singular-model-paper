@@ -1,7 +1,14 @@
 import json
 from typing import List
+import datetime
 import jax
+import haiku as hk
+print(__package__)
+print(__name__)
+print(__file__)
 
+from src.haiku_numpyro_mlp import build_forward_fn, generate_input_data
+from src.const import ACTIVATION_FUNC_SWITCH
 
 def generate_realisable_1hltanh_expt_config(
     expt_name: str,
@@ -16,8 +23,14 @@ def generate_realisable_1hltanh_expt_config(
     num_posterior_samples: int,
     num_warmup: int,
     num_chains: int,
-    thinning: int, 
+    thinning: int,
+    use_datetimesuffix: bool = True,
 ):
+    if use_datetimesuffix:
+        now = datetime.datetime.now()
+        suffix = now.strftime("%Y%m%d%H%M")
+        expt_name += "_" + suffix
+
     config = {
         "expt_name": expt_name,
         "rng_seed": rng_seed,
@@ -57,9 +70,29 @@ def generate_realisable_1hltanh_expt_config(
 
     return config
 
+
 def save_config(config, outfilepath):
     with open(outfilepath, "w") as outfile:
         json.dump(config, outfile)
     return
 
 
+def generate_random_param(
+    rng_seed, layer_sizes, input_dim, prior_mean, prior_std, activation_fn_name="tanh"
+):
+    forward = hk.transform(
+        build_forward_fn(
+            layer_sizes=layer_sizes,
+            activation_fn=ACTIVATION_FUNC_SWITCH[activation_fn_name],
+            initialisation_mean=prior_mean,
+            initialisation_std=prior_std,
+        )
+    )
+    dummy_X = generate_input_data(5, input_dim, jax.random.PRNGKey(0))
+    init_param = forward.init(jax.random.PRNGKey(rng_seed), dummy_X)
+    return init_param
+
+
+if __name__ == "__main__":
+    rand_param = generate_random_param(5, [1, 1], 1, 0.0, 1.0)
+    print(rand_param)

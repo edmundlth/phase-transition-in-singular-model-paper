@@ -11,9 +11,9 @@ import numpy as np
 import haiku as hk
 import numpyro
 
-from const import ACTIVATION_FUNC_SWITCH
-from utils import start_log
-from haiku_mlp_rlct_estimate import (
+from src.const import ACTIVATION_FUNC_SWITCH
+from src.utils import start_log
+from src.haiku_numpyro_mlp import (
     build_forward_fn,
     build_log_likelihood_fn,
     build_model,
@@ -22,6 +22,7 @@ from haiku_mlp_rlct_estimate import (
     run_mcmc, 
     expected_nll
 )
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ def program_initialisation(args):
     logfilepath = make_filepath_fn(args.logfilename)
     logger = start_log(logfilepath, loglevel=logging.DEBUG)
     logger.info("Program starting...")
+    logger.info(f"Commandline inputs: {args}")
     start_time = time.time()
     return logger, make_filepath_fn, start_time
 
@@ -148,7 +150,8 @@ def main(expt_config, args):
     expt_config["output"]["status"] = 0
     expt_config["output"]["enll"] = float(enll) # json doesn't know how to serialise float32 
     expt_config["output"]["commandline_args"] = vars(args)
-    expt_config["output"]["wall_time_taken"] = time.time() - start_time
+    time_taken = time.time() - start_time
+    expt_config["output"]["wall_time_taken"] = time_taken
 
     outfilename = make_filepath_fn("result.json")
     with open(outfilename, 'w') as outfile:
@@ -160,7 +163,7 @@ def main(expt_config, args):
         np.savez_compressed(filepath, **posterior_samples)
         logger.info(f"Posterior samples saved at: {filepath}")
 
-    logger.info("Program successfully finished.")
+    logger.info(f"Program successfully finished. Time taken: {time_taken:.2f} seconds")
     return
 
 

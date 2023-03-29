@@ -20,7 +20,7 @@
 #SBATCH --mem=4096
 
 # The maximum running time of the job in days-hours:mins:sec
-#SBATCH --time=0-0:30:00
+#SBATCH --time=0-0:10:00
 
 #SBATCH --output=test_job_name_output.txt
 #SBATCH --error=test_job_name_error.txt
@@ -32,16 +32,17 @@ if [ "x$SLURM_JOB_ID" == "x" ]; then
    exit 1
 fi
 
-# Activate existing virtual environment
-source /home/elau1/venv/bin/activate
-
 # Run the job from the directory where it was launched (default)
 
 # The modules to load:
-module load mapdamage/2.2.1-r-4.0.4-python3.8.6
+module load python/3.9.5
+
+
+# Activate existing virtual environment
+source /home/elau1/venv/bin/activate
 
 # The job command(s):
-python run_experiment.py --config_filepath ./sample_experiment_config.json --output_dir ./outputs/test_20230328/ --host_device_count 4 --save_posterior_samples
+python run_experiment.py --config_filepath ./sample_experiment_config.json --output_dir ./outputs/test_$(date +"%Y%m%d_%H%M")/ --host_device_count 4 --save_posterior_samples
 
 # deactivate virtualenv
 deactivate
