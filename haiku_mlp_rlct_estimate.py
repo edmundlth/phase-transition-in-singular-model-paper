@@ -51,7 +51,7 @@ def localised_normal_prior(param_center, std=1.0):
 
 
 def build_forward_fn(
-    layer_sizes, activation_fn, initialisation_mean=0.0, initialisation_std=1.0
+    layer_sizes, activation_fn, initialisation_mean=0.0, initialisation_std=1.0, with_bias=False
 ):
     """
     Construct a Haiku transformed forward function for an MLP network
@@ -63,7 +63,7 @@ def build_forward_fn(
 
     def forward(x):
         mlp = hk.nets.MLP(
-            layer_sizes, activation=activation_fn, w_init=w_initialiser, with_bias=False
+            layer_sizes, activation=activation_fn, w_init=w_initialiser, with_bias=with_bias
         )
         return mlp(x)
 

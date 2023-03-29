@@ -1,24 +1,17 @@
 import argparse
 import os
 import time
-
-import jax
-import jax.numpy as jnp
-import jax.tree_util as jtree
-import numpy as np
-import scipy
+import pickle
 import functools
-
-import haiku as hk
-import numpyro
-import numpyro.distributions as dist
-import matplotlib.pyplot as plt
-import os
 import json
 
+import jax
+import jax.tree_util as jtree
+import numpy as np
+import haiku as hk
+import numpyro
+
 from const import ACTIVATION_FUNC_SWITCH
-
-
 from haiku_mlp_rlct_estimate import (
     build_forward_fn,
     build_log_likelihood_fn,
@@ -29,10 +22,10 @@ from haiku_mlp_rlct_estimate import (
     expected_nll
 )
 
-import pickle
-
 
 def main(expt_config, args):
+    start_time = time.time()
+
     rngseed = expt_config["rng_seed"]
     rngkeyseq = hk.PRNGSequence(jax.random.PRNGKey(rngseed))
 
@@ -55,9 +48,10 @@ def main(expt_config, args):
             activation_fn=ACTIVATION_FUNC_SWITCH[
                 truth_config["activation_fn_name"].lower()
             ],
+            with_bias=truth_config["with_bias"]
         )
     )
-    forward_true.init(jax.random.PRNGKey(0), X)
+    true_init = forward_true.init(jax.random.PRNGKey(0), X)
     Y = generate_output_data(
         forward_true, true_param, X, next(rngkeyseq), sigma=truth_config["sigma_obs"]
     )
@@ -65,7 +59,9 @@ def main(expt_config, args):
     # Construct `forward` for model, numpyro `model` and log_likelihood_fn
     model_config = expt_config["model"]["model_args"]
     sigma_obs = model_config["sigma_obs"]
-    prior_name = expt_config["prior"]["distribution_name"] # TODO: only implementing normal for now.
+    prior_name = expt_config["prior"]["distribution_name"] 
+    if prior_name.lower() != "normal": # TODO: only implementing normal for now.
+        raise NotImplementedError("Only normal prior implemented.")
     prior_config = expt_config["prior"]["distribution_args"]
     prior_mean = prior_config["loc"]
     prior_std = prior_config["scale"]
@@ -77,7 +73,8 @@ def main(expt_config, args):
                 model_config["activation_fn_name"].lower()
             ], 
             initialisation_mean=prior_mean,
-            initialisation_std=prior_std
+            initialisation_std=prior_std, 
+            with_bias=model_config["with_bias"]
         )
     )
     init_param = forward.init(next(rngkeyseq), X)
@@ -106,7 +103,7 @@ def main(expt_config, args):
         progress_bar=(not args.quiet),
     )
     posterior_samples = mcmc.get_samples()
-    num_mcmc_samples = num_mcmc_samples = len(
+    num_mcmc_samples = len(
         posterior_samples[list(posterior_samples.keys())[0]]
     )
     param_list = [
@@ -117,8 +114,25 @@ def main(expt_config, args):
     print(f"Finished temp={1/itemp:.3f}. Expected NLL={enll:.3f}")
     
     # save to output directory and record directory full path.
+    outdirpath = args.output_dir
+    if os.path.exists(outdirpath):
+        print(f"WARNING: Output directory path already exist: {outdirpath}")
+    if not os.path.isdir(outdirpath):
+        os.mkdir(outdirpath)
+    expt_config["output"]["output_directory"] = outdirpath
     # update experiment status.
+    expt_config["output"]["status"] = 0
+    expt_config["output"]["enll"] = float(enll) # json doesn't know how to serialise float32 
+    expt_config["output"]["commandline_args"] = vars(args)
+    expt_config["output"]["wall_time_taken"] = time.time() - start_time
 
+    outfilename = os.path.join(outdirpath, "result.json")
+    with open(outfilename, 'w') as outfile:
+        json.dump(expt_config, outfile, indent=4)
+
+    if args.save_posterior_samples:
+        filepath = os.path.join(outdirpath, "posterior_samples.npz")
+        np.savez(filepath, **posterior_samples)
     return
 
 
@@ -167,4 +181,5 @@ if __name__ == "__main__":
         numpyro.set_host_device_count(expt_config["mcmc_config"]["num_chains"])
 
     print(expt_config)
+    print(args)
     main(expt_config, args)

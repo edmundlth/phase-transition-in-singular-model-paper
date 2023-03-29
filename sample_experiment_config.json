@@ -6,8 +6,8 @@
     "truth": {
         "model_type": "mlp", 
         "model_args": {
-            "layer_sizes": [1], 
-            "use_bias": false, 
+            "layer_sizes": [1, 1], 
+            "with_bias": false, 
             "activation_fn_name": "tanh", 
             "sigma_obs": 0.1,
             "param_filepath": "test.pkl"
@@ -16,8 +16,8 @@
     "model": {
         "model_type": "mlp", 
         "model_args": {
-            "layer_sizes": [1], 
-            "use_bias": false, 
+            "layer_sizes": [1, 1], 
+            "with_bias": false, 
             "activation_fn_name": "tanh", 
             "sigma_obs": 0.1
         }
