@@ -49,7 +49,7 @@ def build_forward_fn(
     based on specified architectural parameters.
     """
     w_initialiser = hk.initializers.RandomNormal(
-        stddev=initialisation_mean, mean=initialisation_std
+        stddev=initialisation_std, mean=initialisation_mean
     )
 
     def forward(x):
