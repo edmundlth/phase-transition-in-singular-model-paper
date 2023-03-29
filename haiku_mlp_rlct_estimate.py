@@ -18,7 +18,9 @@ import matplotlib.pyplot as plt
 import os
 
 from const import ACTIVATION_FUNC_SWITCH
-
+from utils import start_log
+import logging
+logger = logging.getLogger(__name__)
 
 def const_factorised_normal_prior(param_example, prior_mean=0.0, prior_std=1.0):
     """
@@ -149,6 +151,8 @@ def run_mcmc(
 
 
 def main(args):
+    logger = start_log()
+
     rngseed = args.rng_seed
     rngkeyseq = hk.PRNGSequence(jax.random.PRNGKey(rngseed))
     if args.layer_sizes is None:
@@ -199,7 +203,7 @@ def main(args):
         1 / jnp.log(n) * (1 + 1 / jnp.sqrt(2 * jnp.log(n))),
         args.num_itemps,
     )
-    print(f"itemps={itemps}")
+    logger.info(f"itemps={itemps}")
 
     enlls = []
     for i_itemp, itemp in enumerate(itemps):
@@ -229,12 +233,12 @@ def main(args):
         ]
         enll = expected_nll(log_likelihood_fn, map(treedef.unflatten, param_list), X, Y)
         enlls.append(enll)
-        print(f"Finished {i_itemp} temp={1/itemp:.3f}. Expected NLL={enll:.3f}")
+        logger.info(f"Finished {i_itemp} temp={1/itemp:.3f}. Expected NLL={enll:.3f}")
         if len(enlls) > 1:
             slope, intercept, r_val, _, _ = scipy.stats.linregress(
                 1 / itemps[: len(enlls)], enlls
             )
-            print(
+            logger.info(
                 f"est. RLCT={slope:.3f}, energy={intercept / n:.3f}, r2={r_val**2:.3f}"
             )
 

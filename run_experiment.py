@@ -12,6 +12,7 @@ import haiku as hk
 import numpyro
 
 from const import ACTIVATION_FUNC_SWITCH
+from utils import start_log
 from haiku_mlp_rlct_estimate import (
     build_forward_fn,
     build_log_likelihood_fn,
@@ -21,10 +22,27 @@ from haiku_mlp_rlct_estimate import (
     run_mcmc, 
     expected_nll
 )
+import logging
+logger = logging.getLogger(__name__)
+
+def program_initialisation(args):
+    outdirpath = args.output_dir
+    if os.path.exists(outdirpath):
+        logging.warn(f"WARNING: Output directory path already exist: {outdirpath}")
+    os.makedirs(outdirpath, exist_ok=True)
+
+    def make_filepath_fn(filename):
+        return os.path.join(outdirpath, filename)
+    
+    logfilepath = make_filepath_fn(args.logfilename)
+    logger = start_log(logfilepath, loglevel=logging.DEBUG)
+    logger.info("Program starting...")
+    start_time = time.time()
+    return logger, make_filepath_fn, start_time
 
 
 def main(expt_config, args):
-    start_time = time.time()
+    logger, make_filepath_fn, start_time = program_initialisation(args)
 
     rngseed = expt_config["rng_seed"]
     rngkeyseq = hk.PRNGSequence(jax.random.PRNGKey(rngseed))
@@ -34,9 +52,6 @@ def main(expt_config, args):
     true_layer_sizes = truth_config["layer_sizes"]
     input_dim = true_layer_sizes[0]
     output_dim = true_layer_sizes[-1]
-    with open(truth_config["param_filepath"], "rb") as infile:
-        true_param = pickle.load(infile)
-    print(true_param)
 
     num_training_data = expt_config["num_training_data"]
     X = generate_input_data(
@@ -51,10 +66,24 @@ def main(expt_config, args):
             with_bias=truth_config["with_bias"]
         )
     )
-    true_init = forward_true.init(jax.random.PRNGKey(0), X)
+    init_true_param = forward_true.init(jax.random.PRNGKey(0), X)
+
+    true_param_filepath = truth_config["param_filepath"]
+    if true_param_filepath is None:
+        logger.info("True parameter not specified. Randomly generating a new one based on provided model architecture.")
+        true_param = init_true_param
+    else:
+        with open(true_param_filepath, "rb") as infile:
+            true_param = pickle.load(infile)
+    logger.info(f"True parameter:{true_param}")
+
     Y = generate_output_data(
         forward_true, true_param, X, next(rngkeyseq), sigma=truth_config["sigma_obs"]
     )
+    if args.save_training_data:
+        filepath = make_filepath_fn("training_data.npz")
+        np.savez_compressed(filepath, X=X, Y=Y)
+        logger.info(f"Training data saved at: {filepath}")
 
     # Construct `forward` for model, numpyro `model` and log_likelihood_fn
     model_config = expt_config["model"]["model_args"]
@@ -111,28 +140,27 @@ def main(expt_config, args):
         for i in range(num_mcmc_samples)
     ]
     enll = expected_nll(log_likelihood_fn, map(treedef.unflatten, param_list), X, Y)
-    print(f"Finished temp={1/itemp:.3f}. Expected NLL={enll:.3f}")
+    logger.info(f"Finished temp={1/itemp:.3f}. Expected NLL={enll:.3f}")
     
     # save to output directory and record directory full path.
-    outdirpath = args.output_dir
-    if os.path.exists(outdirpath):
-        print(f"WARNING: Output directory path already exist: {outdirpath}")
-    if not os.path.isdir(outdirpath):
-        os.mkdir(outdirpath)
-    expt_config["output"]["output_directory"] = outdirpath
+    expt_config["output"]["output_directory"] = args.output_dir
     # update experiment status.
     expt_config["output"]["status"] = 0
     expt_config["output"]["enll"] = float(enll) # json doesn't know how to serialise float32 
     expt_config["output"]["commandline_args"] = vars(args)
     expt_config["output"]["wall_time_taken"] = time.time() - start_time
 
-    outfilename = os.path.join(outdirpath, "result.json")
+    outfilename = make_filepath_fn("result.json")
     with open(outfilename, 'w') as outfile:
         json.dump(expt_config, outfile, indent=4)
+    logger.info(f"Result JSON saved at: {outfilename}")
 
     if args.save_posterior_samples:
-        filepath = os.path.join(outdirpath, "posterior_samples.npz")
-        np.savez(filepath, **posterior_samples)
+        filepath = make_filepath_fn("posterior_samples.npz")
+        np.savez_compressed(filepath, **posterior_samples)
+        logger.info(f"Posterior samples saved at: {filepath}")
+
+    logger.info("Program successfully finished.")
     return
 
 
@@ -159,6 +187,12 @@ if __name__ == "__main__":
         help="If specified, posterior samples will be saved in the output directory.",
     )
     parser.add_argument(
+        "--save_training_data",
+        action="store_true",
+        default=False,
+        help="If specified, the training data will be saved in the output directory.",
+    )
+    parser.add_argument(
         "--quiet", action="store_true", default=False, help="Lower verbosity level."
     )
     parser.add_argument("--device", default="cpu", type=str, help='use "cpu" or "gpu".')
@@ -167,6 +201,12 @@ if __name__ == "__main__":
         default=None,
         type=int,
         help="Number of host device for parallel run of MCMC chains.",
+    )
+    parser.add_argument(
+        "--logfilename",
+        default="program.log",
+        type=str,
+        help="The name of the file that store program logs. This file will be stored in the output directory.",
     )
 
     args = parser.parse_args()
@@ -180,6 +220,6 @@ if __name__ == "__main__":
     else:
         numpyro.set_host_device_count(expt_config["mcmc_config"]["num_chains"])
 
-    print(expt_config)
-    print(args)
+    logger.info(expt_config)
+    logger.info(args)
     main(expt_config, args)
