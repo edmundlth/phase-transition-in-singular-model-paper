@@ -52,8 +52,7 @@ def main(expt_config, args):
     # Construct true `forward_fn` and generate data X, Y
     truth_config = expt_config["truth"]["model_args"]
     true_layer_sizes = truth_config["layer_sizes"]
-    input_dim = true_layer_sizes[0]
-    output_dim = true_layer_sizes[-1]
+    input_dim = expt_config["input_dim"]
 
     num_training_data = expt_config["num_training_data"]
     X = generate_input_data(
@@ -109,7 +108,7 @@ def main(expt_config, args):
         )
     )
     init_param = forward.init(next(rngkeyseq), X)
-    init_param_flat, treedef = jtree.tree_flatten(init_param)
+    _, treedef = jtree.tree_flatten(init_param)
     param_center = init_param
     log_likelihood_fn = functools.partial(
         build_log_likelihood_fn, forward.apply, sigma=sigma_obs

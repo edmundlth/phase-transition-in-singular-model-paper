@@ -3,10 +3,6 @@ from typing import List
 import datetime
 import jax
 import haiku as hk
-print(__package__)
-print(__name__)
-print(__file__)
-
 from src.haiku_numpyro_mlp import build_forward_fn, generate_input_data
 from src.const import ACTIVATION_FUNC_SWITCH
 
@@ -17,6 +13,7 @@ def generate_realisable_1hltanh_expt_config(
     num_training_data: int,
     true_param_filepath: str,
     sigma_obs: float,
+    input_dim: int, 
     layer_sizes: List[int],
     prior_mean: float,
     prior_std: float,
@@ -36,6 +33,7 @@ def generate_realisable_1hltanh_expt_config(
         "rng_seed": rng_seed,
         "itemp": itemp,
         "num_training_data": num_training_data,
+        "input_dim": input_dim,
         "truth": {
             "model_type": "mlp",
             "model_args": {
@@ -90,9 +88,11 @@ def generate_random_param(
     )
     dummy_X = generate_input_data(5, input_dim, jax.random.PRNGKey(0))
     init_param = forward.init(jax.random.PRNGKey(rng_seed), dummy_X)
+    print(dummy_X)
+    print(forward.apply(init_param, None, dummy_X))
     return init_param
 
 
 if __name__ == "__main__":
-    rand_param = generate_random_param(5, [1, 1], 1, 0.0, 1.0)
+    rand_param = generate_random_param(5, [2, 1], 2, 0.0, 1.0)
     print(rand_param)
