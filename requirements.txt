@@ -37,7 +37,6 @@ fonttools==4.39.2
 fqdn==1.5.1
 h5netcdf==1.1.0
 h5py==3.8.0
-hamiltorch @ git+https://github.com/AdamCobb/hamiltorch@c6b243f3487532e2c1d34a666f613eecbb3c274a
 idna==3.4
 ipykernel==6.22.0
 ipython==8.11.0
