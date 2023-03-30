@@ -2,6 +2,7 @@
 Dataset/*
 experiments/outputs/*
 *.DS_Store*
+archive/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
