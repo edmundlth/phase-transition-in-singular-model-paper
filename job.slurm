@@ -43,9 +43,10 @@ JOBNAME="${JOBNAME:-"test_job"}"
 DATETIMESTRING=$(date +"%Y%m%d_%H%M")
 CONFIGPATH="${CONFIGPATH}"
 CONFIGINDEX="${CONFIGINDEX}"
+OUTPUTDIR="${OUTPUTDIR:-"./outputs"}"
 
 # The job command(s):
-python run_experiment.py --config_filepath ${CONFIGPATH} --config_index ${CONFIGINDEX} --output_dir ./outputs/${JOBNAME}_${CONFIGINDEX}_${DATETIMESTRING}/ --host_device_count 4 --save_posterior_samples --save_training_data --quiet
+python run_experiment.py --config_filepath ${CONFIGPATH} --config_index ${CONFIGINDEX} --output_dir ${OUTPUTDIR}/${JOBNAME}_${CONFIGINDEX}_${DATETIMESTRING}/ --host_device_count 4 --save_posterior_samples --save_training_data --quiet
 
 # deactivate virtualenv
 deactivate

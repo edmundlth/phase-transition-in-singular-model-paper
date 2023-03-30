@@ -41,13 +41,16 @@ module load python/3.9.5
 
 # Activate existing virtual environment
 source /home/elau1/venv/bin/activate
+
+
 JOBNAME="${JOBNAME:-"test_job"}"
 DATETIMESTRING=$(date +"%Y%m%d_%H%M")
 CONFIGPATH="${CONFIGPATH}"
 CONFIGINDEX="${CONFIGINDEX}"
+OUTPUTDIR="${OUTPUTDIR:-"./outputs"}"
 
 # The job command(s):
-python run_experiment.py --config_filepath ${CONFIGPATH} --config_index ${SLURM_ARRAY_TASK_ID} --output_dir ./outputs/${JOBNAME}_${SLURM_ARRAY_TASK_ID}_${DATETIMESTRING}/ --host_device_count 4 --save_posterior_samples --save_training_data --quiet
+python run_experiment.py --config_filepath ${CONFIGPATH} --config_index ${SLURM_ARRAY_TASK_ID} --output_dir ${OUTPUTDIR}/${JOBNAME}_${SLURM_ARRAY_TASK_ID}_${DATETIMESTRING}/ --host_device_count 4 --save_posterior_samples --save_training_data --quiet
 
 # deactivate virtualenv
 deactivate
