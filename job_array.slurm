@@ -24,6 +24,8 @@
 
 #SBATCH --output=slurm_%a_%A.out
 #SBATCH --error=slurm_%a_%A.err
+#SBATCH --array=0-9
+
 
 # check that the script is launched with sbatch
 if [ "x$SLURM_JOB_ID" == "x" ]; then
@@ -45,7 +47,7 @@ CONFIGPATH="${CONFIGPATH}"
 CONFIGINDEX="${CONFIGINDEX}"
 
 # The job command(s):
-python run_experiment.py --config_filepath ${CONFIGPATH} --config_index ${CONFIGINDEX} --output_dir ./outputs/${JOBNAME}_${CONFIGINDEX}_${DATETIMESTRING}/ --host_device_count 4 --save_posterior_samples --save_training_data --quiet
+python run_experiment.py --config_filepath ${CONFIGPATH} --config_index ${SLURM_ARRAY_TASK_ID} --output_dir ./outputs/${JOBNAME}_${SLURM_ARRAY_TASK_ID}_${DATETIMESTRING}/ --host_device_count 4 --save_posterior_samples --save_training_data --quiet
 
 # deactivate virtualenv
 deactivate
