@@ -52,7 +52,7 @@ module load python/3.9.5
 source /home/elau1/venv/bin/activate
 
 # The job command(s):
-python run_experiment.py --config_filepath ${CONFIGPATH} --config_index ${CONFIGINDEX} --output_dir ./outputs/${JOBNAME}_${DATETIMESTRING}/ --host_device_count ${CPUPERTASK} --save_posterior_samples --save_training_data
+python run_experiment.py --config_filepath ${CONFIGPATH} --config_index ${CONFIGINDEX} --output_dir ./outputs/${JOBNAME}_${DATETIMESTRING}/ --host_device_count ${CPUPERTASK} --save_posterior_samples --save_training_data --quiet
 
 # deactivate virtualenv
 deactivate

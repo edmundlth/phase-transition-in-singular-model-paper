@@ -146,7 +146,7 @@ if __name__ == "__main__":
         nargs="+",
         default=None,
         type=int,
-        help="A optional list of positive integers specifying MLP layers sizes including the input and output dimensions. If specified, --a0 and --b0 are ignored. ",
+        help="A optional list of positive integers specifying MLP layers sizes from the first non-input layer up to and including the output layer. If specified, --a0 and --b0 are ignored. ",
     )
     parser.add_argument("--sigma-obs", nargs="?", default=0.1, type=float)
     parser.add_argument("--prior-std", nargs="?", default=1.0, type=float)
