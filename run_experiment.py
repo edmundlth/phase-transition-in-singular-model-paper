@@ -177,6 +177,13 @@ if __name__ == "__main__":
         help="Path to experiment configuration JSON-file",
     )
     parser.add_argument(
+        "--config_index",
+        default=None,
+        type=int,
+        help="If not specified, JSON object in --config_filepath is the experiment configuration itself. If specified, treat the JSON object in --config_filepath as a JSON list. The experiment config is the object at --config_index. ",
+    )
+    
+    parser.add_argument(
         "--output_dir",
         required=True,
         type=str,
@@ -215,6 +222,9 @@ if __name__ == "__main__":
     # read in experiment config.
     with open(args.config_filepath) as config_file:
          expt_config = json.load(config_file)
+
+    if args.config_index is not None:
+        expt_config = expt_config[args.config_index]
 
     numpyro.set_platform(args.device)    
     if args.host_device_count is None:

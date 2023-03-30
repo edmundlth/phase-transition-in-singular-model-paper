@@ -1,29 +1,39 @@
 #!/bin/bash
+JOBNAME="${ENV_JOBNAME:-"test_job"}"
+NODES="${ENV_NODES:-1}"
+NTASKS="${ENV_NTASKS:-1}"
+CPUPERTASK="${ENV_CPUPERTASK:-4}"
+
+CONFIGPATH="${ENV_CONFIGPATH}"
+CONFIGINDEX="${ENV_CONFIGINDEX}"
+
+DATETIMESTRING=$(date +"%Y%m%d_%H%M")
+
 
 # Partition for the job:
 #SBATCH --partition=physical
 
 # Multithreaded (SMP) job: must run on one node 
-#SBATCH --nodes=1
+#SBATCH --nodes=$NODES
 
 # The name of the job:
-#SBATCH --job-name="test_job_name"
+#SBATCH --job-name=$JOBNAME
 
 # The project ID which this job should run under:
 #SBATCH --account="punim0715"
 
 # Maximum number of tasks/CPU cores used by the job:
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=1
+#SBATCH --ntasks=$NTASKS
+#SBATCH --cpus-per-task=$CPUPERTASK
 
 # The amount of memory in megabytes per node:
-#SBATCH --mem=4096
+#SBATCH --mem=$((1024 * $NTASK * $CPUPERTASK))
 
 # The maximum running time of the job in days-hours:mins:sec
-#SBATCH --time=0-0:10:00
+#SBATCH --time=0-1:30:00
 
-#SBATCH --output=test_job_name_output.txt
-#SBATCH --error=test_job_name_error.txt
+#SBATCH --output=${JOBNAME}_stdout.txt
+#SBATCH --error=${JOBNAME}_stderr.txt
 
 
 # check that the script is launched with sbatch
@@ -42,7 +52,7 @@ module load python/3.9.5
 source /home/elau1/venv/bin/activate
 
 # The job command(s):
-python run_experiment.py --config_filepath ./sample_experiment_config.json --output_dir ./outputs/test_$(date +"%Y%m%d_%H%M")/ --host_device_count 4 --save_posterior_samples
+python run_experiment.py --config_filepath ${CONFIGPATH} --config_index ${CONFIGINDEX} --output_dir ./outputs/${JOBNAME}_${DATETIMESTRING}/ --host_device_count ${CPUPERTASK} --save_posterior_samples --save_training_data
 
 # deactivate virtualenv
 deactivate
