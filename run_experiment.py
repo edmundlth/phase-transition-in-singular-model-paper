@@ -45,6 +45,7 @@ def program_initialisation(args):
 
 def main(expt_config, args):
     logger, make_filepath_fn, start_time = program_initialisation(args)
+    logger.info(f"Experiment configuration: {json.dumps(expt_config, indent=2)}")
 
     rngseed = expt_config["rng_seed"]
     rngkeyseq = hk.PRNGSequence(jax.random.PRNGKey(rngseed))
@@ -136,12 +137,13 @@ def main(expt_config, args):
     num_mcmc_samples = len(
         posterior_samples[list(posterior_samples.keys())[0]]
     )
+    logger.info(f"Number of MCMC samples: {num_mcmc_samples}")
     param_list = [
         [posterior_samples[name][i] for name in sorted(posterior_samples.keys())]
         for i in range(num_mcmc_samples)
     ]
     enll = expected_nll(log_likelihood_fn, map(treedef.unflatten, param_list), X, Y)
-    logger.info(f"Finished temp={1/itemp:.3f}. Expected NLL={enll:.3f}")
+    logger.info(f"Expected NLL at temp={1/itemp:.3f} is {enll:.3f}.")
     
     # save to output directory and record directory full path.
     expt_config["output"]["output_directory"] = args.output_dir
@@ -232,6 +234,4 @@ if __name__ == "__main__":
     else:
         numpyro.set_host_device_count(expt_config["mcmc_config"]["num_chains"])
 
-    logger.info(expt_config)
-    logger.info(args)
     main(expt_config, args)

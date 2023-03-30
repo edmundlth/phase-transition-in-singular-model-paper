@@ -140,7 +140,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-training-data", nargs="?", default=1032, type=int)
     parser.add_argument("--a0", nargs="+", default=[0.5], type=float)
     parser.add_argument("--b0", nargs="+", default=[0.9], type=float)
-    parser.add_argument("--input_dim", nargs="+", default=1, type=int, help="Dimension of the input data X.")
+    parser.add_argument("--input_dim", nargs="?", default=1, type=int, help="Dimension of the input data X.")
     parser.add_argument(
         "--layer_sizes",
         nargs="+",

@@ -7,6 +7,7 @@ import haiku as hk
 import numpyro
 import numpyro.distributions as dist
 import os
+import time
 
 import logging
 logger = logging.getLogger(__name__)
@@ -125,6 +126,8 @@ def run_mcmc(
     progress_bar=True,
 ):
     kernel = numpyro.infer.NUTS(model)
+    logger.info("Running MCMC...")
+    start_time = time.time()
     mcmc = numpyro.infer.MCMC(
         kernel,
         num_samples=num_posterior_samples,
@@ -136,5 +139,6 @@ def run_mcmc(
     mcmc.run(
         rng_key, X, Y, param_center, prior_mean, prior_std, itemp=itemp, sigma=sigma
     )
+    logger.info(f"Finished running MCMC. Time taken: {time.time() - start_time:.3f} seconds")
     return mcmc
 

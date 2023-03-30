@@ -139,7 +139,7 @@ if __name__ == "__main__":
         type=int, 
         help="PRNG seed for the experiments."
     )
-    parser.add_argument("--input_dim", nargs="+", default=1, type=int, help="Dimension of the input data X.")
+    parser.add_argument("--input_dim", nargs="?", default=1, type=int, help="Dimension of the input data X.")
     parser.add_argument(
         "--layer_sizes",
         nargs="+",
@@ -158,23 +158,13 @@ if __name__ == "__main__":
     parser.add_argument("--num-training-data", nargs="?", default=2345, type=int)
     parser.add_argument(
         "--output_dir",
-        default=None,
+        required=True, 
         type=str,
         help="a directory for storing generated configurations and true parameter files.",
     )
     args = parser.parse_args()
     now = datetime.datetime.now()
     suffix = now.strftime("%Y%m%d%H%M%S")
-    
-    
-    # rng_seed = int(sys.argv[1])
-    # layer_sizes = [4, 1]
-    # input_dim = 1
-    # prior_mean = 0.0
-    # prior_std = 2.0
-    # sigma_obs = 0.1
-    # num_training_data = 2345
-    # num_itemps = 10
 
     if args.true_param_filepath is None:
         
@@ -219,7 +209,7 @@ if __name__ == "__main__":
     )
     config_list = generate_configs_itemps(partial_config, args.num_itemps)
 
-    filepath = os.path.join(args.output_dir, f"config_list_{suffix}.json")
+    filepath = os.path.join(args.output_dir, f"{expt_name}_config_list_{suffix}.json")
     with open(filepath, "w") as outfile:
         json.dump(config_list, outfile, indent=4)
     
