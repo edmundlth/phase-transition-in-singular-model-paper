@@ -14,17 +14,17 @@
 
 # Maximum number of tasks/CPU cores used by the job:
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=CPUPERTASK
 
 # The amount of memory in megabytes per node:
-#SBATCH --mem=8192
+#SBATCH --mem=4096
 
 # The maximum running time of the job in days-hours:mins:sec
-#SBATCH --time=0-00:17:00
+#SBATCH --time=0-01:00:00
 
 #SBATCH --output=slurm_%a_%A.out
 #SBATCH --error=slurm_%a_%A.err
-#SBATCH --array=0-9
+#SBATCH --array=0-ENDINDEX
 
 
 # check that the script is launched with sbatch
@@ -46,11 +46,10 @@ source /home/elau1/venv/bin/activate
 JOBNAME="${JOBNAME:-"test_job"}"
 DATETIMESTRING=$(date +"%Y%m%d_%H%M")
 CONFIGPATH="${CONFIGPATH}"
-CONFIGINDEX="${CONFIGINDEX}"
 OUTPUTDIR="${OUTPUTDIR:-"./outputs"}"
 
 # The job command(s):
-python run_experiment.py --config_filepath ${CONFIGPATH} --config_index ${SLURM_ARRAY_TASK_ID} --output_dir ${OUTPUTDIR}/${JOBNAME}_${SLURM_ARRAY_TASK_ID}_${DATETIMESTRING}/ --host_device_count 4 --save_posterior_samples --save_training_data --quiet
+python run_experiment.py --config_filepath ${CONFIGPATH} --config_index ${SLURM_ARRAY_TASK_ID} --output_dir ${OUTPUTDIR}/${JOBNAME}_${SLURM_ARRAY_TASK_ID}_${DATETIMESTRING}/ --host_device_count 4 --save_posterior_samples --save_training_data
 
 # deactivate virtualenv
 deactivate

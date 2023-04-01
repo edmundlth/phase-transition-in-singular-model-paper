@@ -225,7 +225,7 @@ if __name__ == "__main__":
     )
     print(f"Number of experiment configs: {len(config_list)}")
 
-    filepath = os.path.join(args.output_dir, f"{expt_name}_config_list.json")
+    filepath = os.path.join(args.output_dir, f"config_list.json")
     with open(filepath, "w") as outfile:
         json.dump(config_list, outfile, indent=4)
     
