@@ -49,7 +49,7 @@ CONFIGPATH="${CONFIGPATH}"
 OUTPUTDIR="${OUTPUTDIR:-"./outputs"}"
 
 # The job command(s):
-python run_experiment.py --config_filepath ${CONFIGPATH} --config_index ${SLURM_ARRAY_TASK_ID} --output_dir ${OUTPUTDIR}/${JOBNAME}_${SLURM_ARRAY_TASK_ID}_${DATETIMESTRING}/ --host_device_count 4 --save_posterior_samples --save_training_data
+python run_experiment.py --config_filepath ${CONFIGPATH} --config_index ${SLURM_ARRAY_TASK_ID} --output_dir ${OUTPUTDIR}/${JOBNAME}_${SLURM_ARRAY_TASK_ID}_${DATETIMESTRING}/ --host_device_count CPUPERTASK --save_posterior_samples --save_training_data
 
 # deactivate virtualenv
 deactivate

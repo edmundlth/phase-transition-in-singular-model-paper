@@ -195,6 +195,7 @@ if __name__ == "__main__":
             args.output_dir, 
             os.path.basename(args.true_param_filepath)
         )
+        print(f"True parameter file path specified. Copying {args.true_param_filepath} to {true_param_filepath}")
         shutil.copy(args.true_param_filepath, true_param_filepath)
 
     expt_name = args.expt_name if args.expt_name is not None else "expt"
