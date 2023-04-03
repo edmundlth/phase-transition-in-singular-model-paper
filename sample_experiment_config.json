@@ -1,0 +1,44 @@
+{
+    "expt_name": "expt_20230308_test",
+    "rng_seed": 42, 
+    "itemp": 0.11693689,
+    "num_training_data": 2023, 
+    "input_dim": 1, 
+    "truth": {
+        "model_type": "mlp", 
+        "model_args": {
+            "layer_sizes": [1, 1], 
+            "with_bias": false, 
+            "activation_fn_name": "tanh", 
+            "sigma_obs": 0.1,
+            "param_filepath": "test.pkl"
+        }
+    }, 
+    "model": {
+        "model_type": "mlp", 
+        "model_args": {
+            "layer_sizes": [1, 1], 
+            "with_bias": false, 
+            "activation_fn_name": "tanh", 
+            "sigma_obs": 0.1
+        }
+    }, 
+    "prior": {
+        "distribution_name": "normal", 
+        "distribution_args": {
+            "loc": 0.0, 
+            "scale": 1.0
+        }
+    }, 
+    "mcmc_config": {
+        "num_posterior_samples": 3000, 
+        "num_warmup": 1000, 
+        "thinning": 4, 
+        "num_chains": 4
+    }, 
+    "output": {
+        "status": -1, 
+        "enll": null, 
+        "output_directory": null
+    }
+}
