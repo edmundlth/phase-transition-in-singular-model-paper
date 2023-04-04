@@ -133,26 +133,47 @@ def main(expt_config, args):
         itemp=itemp,
         progress_bar=(not args.quiet),
     )
-    posterior_samples = mcmc.get_samples()
-    num_mcmc_samples = len(
-        posterior_samples[list(posterior_samples.keys())[0]]
-    )
-    logger.info(f"Number of MCMC samples: {num_mcmc_samples}")
-    param_list = [
-        [posterior_samples[name][i] for name in sorted(posterior_samples.keys())]
-        for i in range(num_mcmc_samples)
-    ]
-    enll = expected_nll(log_likelihood_fn, map(treedef.unflatten, param_list), X, Y)
+    posterior_samples = mcmc.get_samples(group_by_chain=True)
+    # num_mcmc_samples = len(
+    #     posterior_samples[list(posterior_samples.keys())[0]]
+    # )
+    num_chains, num_mcmc_samples_per_chain = posterior_samples[list(posterior_samples.keys())[0]].shape[:2]
+    num_mcmc_samples = num_chains * num_mcmc_samples_per_chain
+    logger.info(f"Total number of MCMC samples: {num_mcmc_samples}")
+    logger.info(f"Number of MCMC chain: {num_chains}")
+    logger.info(f"Number of MCMC samples per chain: {num_mcmc_samples_per_chain}")
+    chain_enlls = []
+    chain_sizes = []
+    for chain_index in range(num_chains):
+        # TODO: is there a better way to do this? vectorisation possible? 
+        param_list = [
+            [posterior_samples[name][chain_index, i] for name in sorted(posterior_samples.keys())]
+            for i in range(num_mcmc_samples_per_chain)
+        ]
+        chain_enll = expected_nll(log_likelihood_fn, map(treedef.unflatten, param_list), X, Y)
+        chain_size = len(param_list)
+        chain_enlls.append(chain_enll)
+        chain_sizes.append(chain_size)
+        logger.info(f"Chain {chain_index} with size {chain_size} has enll {chain_enll}.")
+    enll = np.sum(np.array(chain_enlls) * np.array(chain_sizes)) / np.sum(chain_sizes)
+    logger.info(enll)
+    chain_enlls_std = np.std(chain_enlls)
     logger.info(f"Expected NLL at temp={1/itemp:.3f} is {enll:.3f}.")
-    
-    # save to output directory and record directory full path.
-    expt_config["output"]["output_directory"] = args.output_dir
-    # update experiment status.
-    expt_config["output"]["status"] = 0
-    expt_config["output"]["enll"] = float(enll) # json doesn't know how to serialise float32 
-    expt_config["output"]["commandline_args"] = vars(args)
+    logger.info(f"Across chain enll std: {chain_enlls_std}.")
     time_taken = time.time() - start_time
-    expt_config["output"]["wall_time_taken"] = time_taken
+    # Save experiment output and diagnostics. 
+    expt_config["output"].update(
+        {
+            "output_directory": args.output_dir, 
+            "status": 0,
+            "enll": float(enll), # json doesn't know how to serialise float32 
+            "commandline_args": vars(args),
+            "chain_enlls": list(map(float, chain_enlls)), # json doesn't know how to serialise float32 
+            "chain_sizes": chain_sizes, 
+            "chain_enlls_std": float(chain_enlls_std),
+            "wall_time_taken": time_taken,
+        }
+    )
 
     outfilename = make_filepath_fn("result.json")
     with open(outfilename, 'w') as outfile:
