@@ -45,6 +45,7 @@ def program_initialisation(args):
 
 def main(expt_config, args):
     logger, make_filepath_fn, start_time = program_initialisation(args)
+    logger.info(f"Available devices (n={jax.device_count()}): {jax.devices()}")
     logger.info(f"Experiment configuration: {json.dumps(expt_config, indent=2)}")
 
     rngseed = expt_config["rng_seed"]

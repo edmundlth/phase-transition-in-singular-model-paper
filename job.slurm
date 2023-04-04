@@ -17,10 +17,10 @@
 #SBATCH --cpus-per-task=4
 
 # The amount of memory in megabytes per node:
-#SBATCH --mem=8192
+#SBATCH --mem=4096
 
 # The maximum running time of the job in days-hours:mins:sec
-#SBATCH --time=0-00:17:00
+#SBATCH --time=0-00:30:00
 
 #SBATCH --output=slurm_%a_%A.out
 #SBATCH --error=slurm_%a_%A.err
