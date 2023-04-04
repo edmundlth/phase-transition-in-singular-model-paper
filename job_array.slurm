@@ -22,8 +22,8 @@
 # The maximum running time of the job in days-hours:mins:sec
 #SBATCH --time=0-01:00:00
 
-#SBATCH --output=slurm_%a_%A.out
-#SBATCH --error=slurm_%a_%A.err
+#SBATCH --output=SLURMLOGDIR/slurm_%a_%A.out
+#SBATCH --error=SLURMLOGDIR/slurm_%a_%A.err
 #SBATCH --array=0-ENDINDEX
 
 
