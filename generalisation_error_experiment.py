@@ -10,6 +10,7 @@ import numpyro.distributions as dist
 import matplotlib.pyplot as plt
 import os
 import json
+import pickle
 
 import functools
 import sys
@@ -71,8 +72,14 @@ def main(args):
         )
     )
     init_true_param = forward_true.init(next(rngkeyseq), X)
-    true_flat, true_treedef = jtree.tree_flatten(init_true_param)
-    true_param = init_true_param
+    if args.true_param_filepath is None:
+        logger.info(
+            "True parameter not specified. Randomly generating a new one based on provided model architecture."
+        )
+        true_param = init_true_param
+    else:
+        with open(args.true_param_filepath, "rb") as infile:
+            true_param = pickle.load(infile)
 
     Y = generate_output_data(
         forward_true, true_param, X, next(rngkeyseq), sigma=args.sigma_obs
@@ -154,6 +161,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="RLCT estimation of MLP models.")
+    parser.add_argument("--true_param_filepath", nargs="?", default=None, type=str)
     parser.add_argument("--num-test-samples", nargs="?", default=300, type=int)
     parser.add_argument("--num-posterior-samples", nargs="?", default=2000, type=int)
     parser.add_argument("--thinning", nargs="?", default=4, type=int)
