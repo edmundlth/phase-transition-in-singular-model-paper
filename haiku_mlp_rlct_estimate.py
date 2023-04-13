@@ -11,16 +11,17 @@ import numpyro
 import matplotlib.pyplot as plt
 
 from src.haiku_numpyro_mlp import (
-    build_forward_fn, 
-    build_log_likelihood_fn, 
-    generate_input_data, 
-    generate_output_data, 
-    build_model, 
-    run_mcmc, 
-    expected_nll
+    build_forward_fn,
+    build_log_likelihood_fn,
+    generate_input_data,
+    generate_output_data,
+    build_model,
+    run_mcmc,
+    expected_nll,
 )
 from src.const import ACTIVATION_FUNC_SWITCH
 from src.utils import start_log
+
 
 def main(args):
     logger = start_log()
@@ -66,7 +67,13 @@ def main(args):
     # param_prior_sampler = functools.partial(
     #     const_factorised_normal_prior, param_shapes, treedef, args.prior_mean, args.prior_std
     # )
-    model = functools.partial(build_model, forward.apply)
+    model = functools.partial(
+        build_model,
+        forward.apply,
+        prior_mean=args.prior_mean,
+        prior_std=args.prior_std,
+        sigma=args.sigma_obs,
+    )
 
     n = X.shape[0]
     itemps = jnp.linspace(
@@ -84,9 +91,6 @@ def main(args):
             Y,
             next(rngkeyseq),
             param_center,
-            args.prior_mean,
-            args.prior_std,
-            args.sigma_obs,
             num_posterior_samples=args.num_posterior_samples,
             num_warmup=args.num_warmup,
             num_chains=args.num_chains,
@@ -140,7 +144,13 @@ if __name__ == "__main__":
     parser.add_argument("--num-training-data", nargs="?", default=1032, type=int)
     parser.add_argument("--a0", nargs="+", default=[0.5], type=float)
     parser.add_argument("--b0", nargs="+", default=[0.9], type=float)
-    parser.add_argument("--input_dim", nargs="?", default=1, type=int, help="Dimension of the input data X.")
+    parser.add_argument(
+        "--input_dim",
+        nargs="?",
+        default=1,
+        type=int,
+        help="Dimension of the input data X.",
+    )
     parser.add_argument(
         "--layer_sizes",
         nargs="+",

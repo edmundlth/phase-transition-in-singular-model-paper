@@ -10,7 +10,9 @@ import os
 import time
 
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 def const_factorised_normal_prior(param_example, prior_mean=0.0, prior_std=1.0):
     """
@@ -43,7 +45,11 @@ def localised_normal_prior(param_center, std=1.0):
 
 
 def build_forward_fn(
-    layer_sizes, activation_fn, initialisation_mean=0.0, initialisation_std=1.0, with_bias=False
+    layer_sizes,
+    activation_fn,
+    initialisation_mean=0.0,
+    initialisation_std=1.0,
+    with_bias=False,
 ):
     """
     Construct a Haiku transformed forward function for an MLP network
@@ -55,7 +61,10 @@ def build_forward_fn(
 
     def forward(x):
         mlp = hk.nets.MLP(
-            layer_sizes, activation=activation_fn, w_init=w_initialiser, with_bias=with_bias
+            layer_sizes,
+            activation=activation_fn,
+            w_init=w_initialiser,
+            with_bias=with_bias,
         )
         return mlp(x)
 
@@ -115,9 +124,6 @@ def run_mcmc(
     Y,
     rng_key,
     param_center,
-    prior_mean,
-    prior_std,
-    sigma,
     num_posterior_samples=2000,
     num_warmup=1000,
     num_chains=1,
@@ -136,9 +142,8 @@ def run_mcmc(
         thinning=thinning,
         progress_bar=False if "NUMPYRO_SPHINXBUILD" in os.environ else progress_bar,
     )
-    mcmc.run(
-        rng_key, X, Y, param_center, prior_mean, prior_std, itemp=itemp, sigma=sigma
+    mcmc.run(rng_key, X, Y, param_center, itemp=itemp)
+    logger.info(
+        f"Finished running MCMC. Time taken: {time.time() - start_time:.3f} seconds"
     )
-    logger.info(f"Finished running MCMC. Time taken: {time.time() - start_time:.3f} seconds")
     return mcmc
-

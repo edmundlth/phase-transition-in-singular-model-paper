@@ -19,12 +19,14 @@ from src.haiku_numpyro_mlp import (
     build_model,
     generate_input_data,
     generate_output_data,
-    run_mcmc, 
-    expected_nll
+    run_mcmc,
+    expected_nll,
 )
 
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 def program_initialisation(args):
     outdirpath = args.output_dir
@@ -34,7 +36,7 @@ def program_initialisation(args):
 
     def make_filepath_fn(filename):
         return os.path.join(outdirpath, filename)
-    
+
     logfilepath = make_filepath_fn(args.logfilename)
     logger = start_log(logfilepath, loglevel=logging.DEBUG)
     logger.info("Program starting...")
@@ -66,14 +68,16 @@ def main(expt_config, args):
             activation_fn=ACTIVATION_FUNC_SWITCH[
                 truth_config["activation_fn_name"].lower()
             ],
-            with_bias=truth_config["with_bias"]
+            with_bias=truth_config["with_bias"],
         )
     )
     init_true_param = forward_true.init(jax.random.PRNGKey(0), X)
 
     true_param_filepath = truth_config["param_filepath"]
     if true_param_filepath is None:
-        logger.info("True parameter not specified. Randomly generating a new one based on provided model architecture.")
+        logger.info(
+            "True parameter not specified. Randomly generating a new one based on provided model architecture."
+        )
         true_param = init_true_param
     else:
         with open(true_param_filepath, "rb") as infile:
@@ -91,8 +95,8 @@ def main(expt_config, args):
     # Construct `forward` for model, numpyro `model` and log_likelihood_fn
     model_config = expt_config["model"]["model_args"]
     sigma_obs = model_config["sigma_obs"]
-    prior_name = expt_config["prior"]["distribution_name"] 
-    if prior_name.lower() != "normal": # TODO: only implementing normal for now.
+    prior_name = expt_config["prior"]["distribution_name"]
+    if prior_name.lower() != "normal":  # TODO: only implementing normal for now.
         raise NotImplementedError("Only normal prior implemented.")
     prior_config = expt_config["prior"]["distribution_args"]
     prior_mean = prior_config["loc"]
@@ -103,10 +107,10 @@ def main(expt_config, args):
             layer_sizes=layer_sizes,
             activation_fn=ACTIVATION_FUNC_SWITCH[
                 model_config["activation_fn_name"].lower()
-            ], 
+            ],
             initialisation_mean=prior_mean,
-            initialisation_std=prior_std, 
-            with_bias=model_config["with_bias"]
+            initialisation_std=prior_std,
+            with_bias=model_config["with_bias"],
         )
     )
     init_param = forward.init(next(rngkeyseq), X)
@@ -115,7 +119,13 @@ def main(expt_config, args):
     log_likelihood_fn = functools.partial(
         build_log_likelihood_fn, forward.apply, sigma=sigma_obs
     )
-    model = functools.partial(build_model, forward.apply)
+    model = functools.partial(
+        build_model,
+        forward.apply,
+        prior_mean=prior_mean,
+        prior_std=prior_std,
+        sigma=sigma_obs,
+    )
     itemp = expt_config["itemp"]
     mcmc_config = expt_config["mcmc_config"]
     mcmc = run_mcmc(
@@ -124,9 +134,6 @@ def main(expt_config, args):
         Y,
         next(rngkeyseq),
         param_center,
-        prior_mean,
-        prior_std,
-        sigma_obs,
         num_posterior_samples=mcmc_config["num_posterior_samples"],
         num_warmup=mcmc_config["num_warmup"],
         num_chains=mcmc_config["num_chains"],
@@ -135,7 +142,9 @@ def main(expt_config, args):
         progress_bar=(not args.quiet),
     )
     posterior_samples = mcmc.get_samples(group_by_chain=True)
-    num_chains, num_mcmc_samples_per_chain = posterior_samples[list(posterior_samples.keys())[0]].shape[:2]
+    num_chains, num_mcmc_samples_per_chain = posterior_samples[
+        list(posterior_samples.keys())[0]
+    ].shape[:2]
     num_mcmc_samples = num_chains * num_mcmc_samples_per_chain
     logger.info(f"Total number of MCMC samples: {num_mcmc_samples}")
     logger.info(f"Number of MCMC chain: {num_chains}")
@@ -143,38 +152,47 @@ def main(expt_config, args):
     chain_enlls = []
     chain_sizes = []
     for chain_index in range(num_chains):
-        # TODO: is there a better way to do this? vectorisation possible? 
+        # TODO: is there a better way to do this? vectorisation possible?
         param_list = [
-            [posterior_samples[name][chain_index, i] for name in sorted(posterior_samples.keys())]
+            [
+                posterior_samples[name][chain_index, i]
+                for name in sorted(posterior_samples.keys())
+            ]
             for i in range(num_mcmc_samples_per_chain)
         ]
-        chain_enll = expected_nll(log_likelihood_fn, map(treedef.unflatten, param_list), X, Y)
+        chain_enll = expected_nll(
+            log_likelihood_fn, map(treedef.unflatten, param_list), X, Y
+        )
         chain_size = len(param_list)
         chain_enlls.append(chain_enll)
         chain_sizes.append(chain_size)
-        logger.info(f"Chain {chain_index} with size {chain_size} has enll {chain_enll}.")
+        logger.info(
+            f"Chain {chain_index} with size {chain_size} has enll {chain_enll}."
+        )
     enll = np.sum(np.array(chain_enlls) * np.array(chain_sizes)) / np.sum(chain_sizes)
     logger.info(enll)
     chain_enlls_std = np.std(chain_enlls)
     logger.info(f"Expected NLL at temp={1/itemp:.3f} is {enll:.3f}.")
     logger.info(f"Across chain enll std: {chain_enlls_std}.")
     time_taken = time.time() - start_time
-    # Save experiment output and diagnostics. 
+    # Save experiment output and diagnostics.
     expt_config["output"].update(
         {
-            "output_directory": args.output_dir, 
+            "output_directory": args.output_dir,
             "status": 0,
-            "enll": float(enll), # json doesn't know how to serialise float32 
+            "enll": float(enll),  # json doesn't know how to serialise float32
             "commandline_args": vars(args),
-            "chain_enlls": list(map(float, chain_enlls)), # json doesn't know how to serialise float32 
-            "chain_sizes": chain_sizes, 
+            "chain_enlls": list(
+                map(float, chain_enlls)
+            ),  # json doesn't know how to serialise float32
+            "chain_sizes": chain_sizes,
             "chain_enlls_std": float(chain_enlls_std),
             "wall_time_taken": time_taken,
         }
     )
 
     outfilename = make_filepath_fn("result.json")
-    with open(outfilename, 'w') as outfile:
+    with open(outfilename, "w") as outfile:
         json.dump(expt_config, outfile, indent=4)
     logger.info(f"Result JSON saved at: {outfilename}")
 
@@ -203,7 +221,7 @@ if __name__ == "__main__":
         type=int,
         help="If not specified, JSON object in --config_filepath is the experiment configuration itself. If specified, treat the JSON object in --config_filepath as a JSON list. The experiment config is the object at --config_index. ",
     )
-    
+
     parser.add_argument(
         "--output_dir",
         required=True,
@@ -225,7 +243,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--quiet", action="store_true", default=False, help="Lower verbosity level."
     )
-    parser.add_argument("--device", default=None, type=str, help='use "cpu" or "gpu". If not specified, use the platform detected by JAX')
+    parser.add_argument(
+        "--device",
+        default=None,
+        type=str,
+        help='use "cpu" or "gpu". If not specified, use the platform detected by JAX',
+    )
     parser.add_argument(
         "--host_device_count",
         default=None,
@@ -242,7 +265,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     # read in experiment config.
     with open(args.config_filepath) as config_file:
-         expt_config = json.load(config_file)
+        expt_config = json.load(config_file)
 
     if args.config_index is not None:
         expt_config = expt_config[args.config_index]
@@ -250,7 +273,7 @@ if __name__ == "__main__":
     jax_platform = jax.lib.xla_bridge.get_backend().platform
     print("jax backend:", jax_platform)
     if args.devices is not None:
-        numpyro.set_platform(args.device)  
+        numpyro.set_platform(args.device)
     else:
         numpyro.set_platform(jax_platform)
 
