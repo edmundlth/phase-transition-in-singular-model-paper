@@ -43,6 +43,7 @@ def generate_config_realisable_1hltanh_expt(
     true_param_filepath: str,
     sigma_obs: float,
     input_dim: int, 
+    true_layer_sizes: List[int],
     layer_sizes: List[int],
     prior_mean: float,
     prior_std: float,
@@ -66,7 +67,7 @@ def generate_config_realisable_1hltanh_expt(
         "truth": {
             "model_type": "mlp",
             "model_args": {
-                "layer_sizes": layer_sizes,
+                "layer_sizes": true_layer_sizes,
                 "with_bias": False,
                 "activation_fn_name": "tanh",
                 "sigma_obs": sigma_obs,
@@ -156,6 +157,13 @@ if __name__ == "__main__":
         type=int,
         help="A list of positive integers specifying MLP layers sizes from the first non-input layer up to and including the output layer. ",
     )
+    parser.add_argument(
+        "--true_layer_sizes",
+        nargs="+",
+        type=int,
+        default=None,
+        help="Same as --layer_sizes for for the true model. If not specified, values for --layer_sizes are used. ",
+    )
     parser.add_argument("--sigma_obs", nargs="?", default=0.1, type=float)
     parser.add_argument("--prior_std", nargs="?", default=1.0, type=float)
     parser.add_argument("--prior_mean", nargs="?", default=0.0, type=float)
@@ -173,16 +181,15 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
-
-    if args.true_param_filepath is None:
-        
+    true_layer_sizes = args.true_layer_sizes if args.true_layer_sizes is not None else args.layer_sizes
+    if args.true_param_filepath is None:    
         true_param = generate_random_param(
-            args.rng_seed_list[-1], args.layer_sizes, args.input_dim, args.prior_mean, args.prior_std
+            args.rng_seed_list[-1], true_layer_sizes, args.input_dim, args.prior_mean, args.prior_std
         )
         print(f"Generated new true parameter: {true_param}")
     
         # Save the new true parameter tree to a file
-        str_layer_size = '_'.join([str(s) for s in args.layer_sizes])
+        str_layer_size = '_'.join([str(s) for s in true_layer_sizes])
         true_param_filepath = os.path.join(
             args.output_dir, 
             f"params_{args.input_dim}_{str_layer_size}.pkl"
@@ -208,7 +215,8 @@ if __name__ == "__main__":
         true_param_filepath=true_param_filepath, 
         sigma_obs=args.sigma_obs, 
         input_dim=args.input_dim, 
-        layer_sizes=args.layer_sizes, 
+        true_layer_sizes=true_layer_sizes,
+        layer_sizes=args.layer_sizes,
         prior_mean=args.prior_mean, 
         prior_std=args.prior_std, 
         num_posterior_samples=args.num_posterior_samples, 
