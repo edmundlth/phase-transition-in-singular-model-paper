@@ -135,9 +135,6 @@ def main(expt_config, args):
         progress_bar=(not args.quiet),
     )
     posterior_samples = mcmc.get_samples(group_by_chain=True)
-    # num_mcmc_samples = len(
-    #     posterior_samples[list(posterior_samples.keys())[0]]
-    # )
     num_chains, num_mcmc_samples_per_chain = posterior_samples[list(posterior_samples.keys())[0]].shape[:2]
     num_mcmc_samples = num_chains * num_mcmc_samples_per_chain
     logger.info(f"Total number of MCMC samples: {num_mcmc_samples}")
@@ -228,7 +225,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--quiet", action="store_true", default=False, help="Lower verbosity level."
     )
-    parser.add_argument("--device", default="cpu", type=str, help='use "cpu" or "gpu".')
+    parser.add_argument("--device", default=None, type=str, help='use "cpu" or "gpu". If not specified, use the platform detected by JAX')
     parser.add_argument(
         "--host_device_count",
         default=None,
@@ -250,10 +247,15 @@ if __name__ == "__main__":
     if args.config_index is not None:
         expt_config = expt_config[args.config_index]
 
-    numpyro.set_platform(args.device)    
+    jax_platform = jax.lib.xla_bridge.get_backend().platform
+    print("jax backend:", jax_platform)
+    if args.devices is not None:
+        numpyro.set_platform(args.device)  
+    else:
+        numpyro.set_platform(jax_platform)
+
     if args.host_device_count is None:
         numpyro.set_host_device_count(args.host_device_count)
     else:
         numpyro.set_host_device_count(expt_config["mcmc_config"]["num_chains"])
-
     main(expt_config, args)
