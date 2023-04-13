@@ -270,15 +270,16 @@ if __name__ == "__main__":
     if args.config_index is not None:
         expt_config = expt_config[args.config_index]
 
-    jax_platform = jax.lib.xla_bridge.get_backend().platform
-    print("jax backend:", jax_platform)
-    if args.devices is not None:
-        numpyro.set_platform(args.device)
-    else:
-        numpyro.set_platform(jax_platform)
-
-    if args.host_device_count is None:
+    if args.host_device_count is not None:
         numpyro.set_host_device_count(args.host_device_count)
     else:
         numpyro.set_host_device_count(expt_config["mcmc_config"]["num_chains"])
+
+    jax_platform = jax.lib.xla_bridge.get_backend().platform
+    if args.device is not None:
+        numpyro.set_platform(args.device)
+    else:
+        numpyro.set_platform(jax_platform)    
+    print("jax backend:", jax_platform)
+    print(f"JAX devices (num={jax.device_count()}): {jax.devices()}")
     main(expt_config, args)
