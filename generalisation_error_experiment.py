@@ -125,7 +125,7 @@ def main(args):
     )
     posterior_samples = mcmc.get_samples()
     num_mcmc_samples = posterior_samples[list(posterior_samples.keys())[0]].shape[0]
-    print(f"Num mcmc samples={num_mcmc_samples}")
+    logger.info(f"Num mcmc samples={num_mcmc_samples}")
 
     param_list = [
         treedef.unflatten(
@@ -152,7 +152,7 @@ def main(args):
         "BL": float(b_loss), 
         "Bg": float(bg), 
     }
-    print(json.dumps(result, indent=2))
+    logger.info(json.dumps(result, indent=2))
     outfilename = args.outfileprefix + ".json"
     with open(outfilename, "w") as outfile:
         json.dump(result, outfile) # no need for `indent` for such a small output. 
