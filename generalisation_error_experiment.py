@@ -68,7 +68,7 @@ def main(args):
             activation_fn=ACTIVATION_FUNC_SWITCH["tanh"],
             initialisation_mean=args.prior_mean,
             initialisation_std=args.prior_std,
-            with_bias=False,
+            with_bias=args.with_true_bias,
         )
     )
     init_true_param = forward_true.init(next(rngkeyseq), X)
@@ -93,7 +93,7 @@ def main(args):
             activation_fn=ACTIVATION_FUNC_SWITCH["tanh"],
             initialisation_mean=args.prior_mean,
             initialisation_std=args.prior_std,
-            with_bias=False,
+            with_bias=args.with_bias,
         )
     )
     init_param = forward.init(next(rngkeyseq), X)
@@ -155,7 +155,7 @@ def main(args):
     print(json.dumps(result, indent=2))
     outfilename = args.outfileprefix + ".json"
     with open(outfilename, "w") as outfile:
-        json.dump(result, outfile, indent=4)
+        json.dump(result, outfile) # no need for `indent` for such a small output. 
     return
 
 
@@ -190,8 +190,14 @@ if __name__ == "__main__":
         default=[1, 1],
         help="Same as --layer_sizes for for the true model. If not specified, values for --layer_sizes are used. ",
     )
+    parser.add_argument(
+        "--with_bias", action="store_true", default=False, help="If set, the model network will use bias parameters."
+    )
+    parser.add_argument(
+        "--with_true_bias", action="store_true", default=False, help="If set, the true network will use bias parameters."
+    )
     parser.add_argument("--sigma-obs", nargs="?", default=0.1, type=float)
-    parser.add_argument("--prior-std", nargs="?", default=1.0, type=float)
+    parser.add_argument("--prior-std", nargs="?", default=3.0, type=float)
     parser.add_argument("--prior-mean", nargs="?", default=0.0, type=float)
     parser.add_argument("--activation-fn-name", nargs="?", default="tanh", type=str)
     parser.add_argument("--device", default=None, type=str, help='use "cpu" or "gpu".')

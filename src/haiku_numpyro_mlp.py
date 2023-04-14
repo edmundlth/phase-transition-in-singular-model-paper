@@ -58,12 +58,17 @@ def build_forward_fn(
     w_initialiser = hk.initializers.RandomNormal(
         stddev=initialisation_std, mean=initialisation_mean
     )
+    if with_bias:
+        b_initialiser = hk.initializers.RandomNormal(stddev=initialisation_std, mean=initialisation_mean)
+    else:
+        b_initialiser = None
 
     def forward(x):
         mlp = hk.nets.MLP(
             layer_sizes,
             activation=activation_fn,
             w_init=w_initialiser,
+            b_init=b_initialiser,
             with_bias=with_bias,
         )
         return mlp(x)
