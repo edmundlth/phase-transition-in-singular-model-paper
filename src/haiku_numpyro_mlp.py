@@ -6,13 +6,15 @@ import optax
 import haiku as hk
 import numpyro
 import numpyro.distributions as dist
+import matplotlib.pyplot as plt
+import scipy
+
 import os
 import time
-
 import logging
 
-logger = logging.getLogger(__name__)
-
+# logger = logging.getLogger(__name__)
+logger = logging.getLogger("__main__")
 
 def const_factorised_normal_prior(param_example, prior_mean=0.0, prior_std=1.0):
     """
@@ -152,3 +154,50 @@ def run_mcmc(
         f"Finished running MCMC. Time taken: {time.time() - start_time:.3f} seconds"
     )
     return mcmc
+
+
+def chain_wise_enlls(mcmc, treedef, log_likelihood_fn, X, Y):
+    posterior_samples = mcmc.get_samples(group_by_chain=True)
+    num_chains, num_mcmc_samples_per_chain = posterior_samples[
+        list(posterior_samples.keys())[0]
+    ].shape[:2]
+    num_mcmc_samples = num_chains * num_mcmc_samples_per_chain
+    logger.info(f"Total number of MCMC samples: {num_mcmc_samples}")
+    logger.info(f"Number of MCMC chain: {num_chains}")
+    logger.info(f"Number of MCMC samples per chain: {num_mcmc_samples_per_chain}")
+    chain_enlls = []
+    chain_sizes = []
+    for chain_index in range(num_chains):
+        # TODO: is there a better way to do this? vectorisation possible?
+        param_list = [
+            [
+                posterior_samples[name][chain_index, i]
+                for name in sorted(posterior_samples.keys())
+            ]
+            for i in range(num_mcmc_samples_per_chain)
+        ]
+        chain_enll = expected_nll(
+            log_likelihood_fn, map(treedef.unflatten, param_list), X, Y
+        )
+        chain_size = len(param_list)
+        chain_enlls.append(chain_enll)
+        chain_sizes.append(chain_size)
+        logger.info(
+            f"Chain {chain_index} with size {chain_size} has enll {chain_enll}."
+        )
+    return chain_enlls, chain_sizes
+
+def plot_rlct_regression(itemps, enlls, n):
+    fig, ax = plt.subplots(figsize=(5, 5))
+    slope, intercept, r_val, _, _ = scipy.stats.linregress(1 / itemps, enlls)
+    ax.plot(1 / itemps, enlls, "kx")
+    ax.plot(
+        1 / itemps,
+        1 / itemps * slope + intercept,
+        label=f"$\lambda$={slope:.3f}, $nL_n(w_0)$={intercept:.3f}, $R^2$={r_val**2:.2f}",
+    )
+    ax.legend()
+    ax.set_xlabel("Temperature")
+    ax.set_ylabel("Expected NLL")
+    ax.set_title(f"n={n}, L_n={intercept / n:.3f}")
+    return fig, ax

@@ -2,13 +2,12 @@ import jax
 import jax.numpy as jnp
 import jax.tree_util as jtree
 import numpy as np
+import scipy
 
 import haiku as hk
 import numpyro
-from numpyro import handlers
 import numpyro.distributions as dist
 import matplotlib.pyplot as plt
-import os
 import json
 import pickle
 
@@ -17,15 +16,16 @@ import sys
 import argparse
 from src.haiku_numpyro_mlp import (
     build_forward_fn,
-    build_log_likelihood_fn,
     build_model,
     generate_input_data,
     generate_output_data,
     run_mcmc,
-    expected_nll,
+    build_log_likelihood_fn,
+    chain_wise_enlls,
+    plot_rlct_regression,
 )
 from src.const import ACTIVATION_FUNC_SWITCH
-from src.utils import start_log
+from src.utils import start_log, linspaced_itemps_by_n
 import logging
 
 
@@ -50,7 +50,7 @@ def compute_bayesian_loss(loglike_fn, X_test, Y_test, param_list):
 
 
 def main(args):
-    logger = start_log(None, loglevel=logging.DEBUG)
+    logger = start_log(None, loglevel=logging.DEBUG, log_name=__name__)
     logger.info("Program starting...")
     logger.info(f"Commandline inputs: {args}")
     
@@ -152,6 +152,60 @@ def main(args):
         "BL": float(b_loss), 
         "Bg": float(bg), 
     }
+
+    if args.num_itemps is not None: 
+        n = args.num_training_data
+        assert n == len(X)
+        assert n == len(Y)
+        itemps = linspaced_itemps_by_n(args.num_training_data, num_itemps=args.num_itemps)
+        logger.info(f"Sequence of itemps: {itemps}")
+        log_likelihood_fn = functools.partial(
+            build_log_likelihood_fn, forward.apply, sigma=args.sigma_obs
+        )
+        enlls = []
+        stds = []
+        for i_itemp, itemp in enumerate(itemps):
+            mcmc = run_mcmc(
+                model,
+                X,
+                Y,
+                next(rngkeyseq),
+                param_center,
+                num_posterior_samples=args.num_posterior_samples,
+                num_warmup=args.num_warmup,
+                num_chains=args.num_chains,
+                thinning=args.thinning,
+                itemp=itemp,
+                progress_bar=(not args.quiet),
+            )
+            chain_enlls, chain_sizes = chain_wise_enlls(mcmc, treedef, log_likelihood_fn, X, Y)
+            enll = np.sum(np.array(chain_enlls) * np.array(chain_sizes)) / np.sum(chain_sizes)
+            chain_enlls_std = np.std(chain_enlls)
+            logger.info(f"Finished {i_itemp} temp={1/itemp:.3f}. Expected NLL={enll:.3f}")
+            logger.info(f"Across chain enll std: {chain_enlls_std}.")
+            enlls.append(enll)
+            stds.append(chain_enlls_std)
+            if len(enlls) > 1:
+                slope, intercept, r_val, _, _ = scipy.stats.linregress(
+                    1 / itemps[: len(enlls)], enlls
+                )
+                logger.info(
+                    f"est. RLCT={slope:.3f}, energy={intercept / n:.3f}, r2={r_val**2:.3f}"
+                )
+        fig, ax = plot_rlct_regression(itemps, enlls, n)
+        fig.savefig(args.outfileprefix + "_rlct_regression.png")
+
+        slope, intercept, r_val, _, _ = scipy.stats.linregress(1 / itemps, enlls)
+        result["rlct_estimation"] = {
+            "n": n,
+            "itemps": [float(t) for t in itemps], 
+            "enlls": enlls,
+            "chain_stds": stds,
+            "slope": slope, 
+            "intercept": intercept,
+            "r^2": r_val**2,
+        }
+    
     logger.info(json.dumps(result, indent=2))
     outfilename = args.outfileprefix + ".json"
     with open(outfilename, "w") as outfile:
@@ -168,6 +222,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-warmup", nargs="?", default=500, type=int)
     parser.add_argument("--num-chains", nargs="?", default=4, type=int)
     parser.add_argument("--num-training-data", nargs="?", default=1032, type=int)
+    parser.add_argument("--num_itemps", nargs="?", default=None, type=int, help="If this is specified, the RLCT estimation procedure will be run.")
     parser.add_argument(
         "--input_dim",
         nargs="?",

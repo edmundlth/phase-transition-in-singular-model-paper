@@ -31,6 +31,7 @@ def start_log(logfile=None, loglevel=logging.INFO, log_name=None, log_to_stdout=
     """
     if log_name is None:
         log_name = __name__
+    print(f"LOGGER NAME: {log_name}")
     logger = logging.getLogger(log_name)
     logger.setLevel(loglevel)
 
@@ -39,14 +40,14 @@ def start_log(logfile=None, loglevel=logging.INFO, log_name=None, log_to_stdout=
     if logfile is not None:
         # Set up a file handler for logging to a file
         fh = logging.FileHandler(logfile)
-        fh.setLevel(logging.DEBUG)
+        fh.setLevel(loglevel)
         fh.setFormatter(formatter)
         logger.addHandler(fh)
 
     if log_to_stdout:
         # Set up a stream handler for logging to the console
         ch = logging.StreamHandler(sys.stdout)
-        ch.setLevel(logging.INFO)
+        ch.setLevel(loglevel)
         ch.setFormatter(formatter)
         logger.addHandler(ch)
     return logger

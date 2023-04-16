@@ -20,6 +20,7 @@ from src.haiku_numpyro_mlp import (
     generate_input_data,
     generate_output_data,
     run_mcmc,
+    chain_wise_enlls,
     expected_nll,
 )
 
@@ -38,7 +39,7 @@ def program_initialisation(args):
         return os.path.join(outdirpath, filename)
 
     logfilepath = make_filepath_fn(args.logfilename)
-    logger = start_log(logfilepath, loglevel=logging.DEBUG)
+    logger = start_log(logfilepath, loglevel=logging.DEBUG, log_name=__name__)
     logger.info("Program starting...")
     logger.info(f"Commandline inputs: {args}")
     start_time = time.time()
@@ -126,6 +127,8 @@ def main(expt_config, args):
         prior_std=prior_std,
         sigma=sigma_obs,
     )
+
+    # Run MCMC sampling at the specified `itemp`
     itemp = expt_config["itemp"]
     mcmc_config = expt_config["mcmc_config"]
     mcmc = run_mcmc(
@@ -141,36 +144,10 @@ def main(expt_config, args):
         itemp=itemp,
         progress_bar=(not args.quiet),
     )
-    posterior_samples = mcmc.get_samples(group_by_chain=True)
-    num_chains, num_mcmc_samples_per_chain = posterior_samples[
-        list(posterior_samples.keys())[0]
-    ].shape[:2]
-    num_mcmc_samples = num_chains * num_mcmc_samples_per_chain
-    logger.info(f"Total number of MCMC samples: {num_mcmc_samples}")
-    logger.info(f"Number of MCMC chain: {num_chains}")
-    logger.info(f"Number of MCMC samples per chain: {num_mcmc_samples_per_chain}")
-    chain_enlls = []
-    chain_sizes = []
-    for chain_index in range(num_chains):
-        # TODO: is there a better way to do this? vectorisation possible?
-        param_list = [
-            [
-                posterior_samples[name][chain_index, i]
-                for name in sorted(posterior_samples.keys())
-            ]
-            for i in range(num_mcmc_samples_per_chain)
-        ]
-        chain_enll = expected_nll(
-            log_likelihood_fn, map(treedef.unflatten, param_list), X, Y
-        )
-        chain_size = len(param_list)
-        chain_enlls.append(chain_enll)
-        chain_sizes.append(chain_size)
-        logger.info(
-            f"Chain {chain_index} with size {chain_size} has enll {chain_enll}."
-        )
+
+    # Compute Expected negative log likelihood
+    chain_enlls, chain_sizes = chain_wise_enlls(mcmc, treedef, log_likelihood_fn, X, Y)
     enll = np.sum(np.array(chain_enlls) * np.array(chain_sizes)) / np.sum(chain_sizes)
-    logger.info(enll)
     chain_enlls_std = np.std(chain_enlls)
     logger.info(f"Expected NLL at temp={1/itemp:.3f} is {enll:.3f}.")
     logger.info(f"Across chain enll std: {chain_enlls_std}.")
@@ -197,6 +174,7 @@ def main(expt_config, args):
     logger.info(f"Result JSON saved at: {outfilename}")
 
     if args.save_posterior_samples:
+        posterior_samples = mcmc.get_samples(group_by_chain=True)
         filepath = make_filepath_fn("posterior_samples.npz")
         np.savez_compressed(filepath, **posterior_samples)
         logger.info(f"Posterior samples saved at: {filepath}")
