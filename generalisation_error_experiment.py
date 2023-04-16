@@ -12,7 +12,7 @@ import json
 import pickle
 
 import functools
-import sys
+import os
 import argparse
 from src.haiku_numpyro_mlp import (
     build_forward_fn,
@@ -48,11 +48,24 @@ def compute_bayesian_loss(loglike_fn, X_test, Y_test, param_list):
     bg = np.mean(bgs)
     return bg
 
+def compute_gibbs_loss(loglike_fn, X_test, Y_test, param_list):
+    # TODO: check and test. 
+    gerrs = []
+    for i in range(len(param_list)):
+        param = param_list[i]
+        gibbs_err = np.mean(loglike_fn(param, X_test, Y_test))
+        gerrs.append(gibbs_err)
+    gg = np.mean(gerrs)
+    return gg
+
 
 def main(args):
     logger = start_log(None, loglevel=logging.DEBUG, log_name=__name__)
     logger.info("Program starting...")
     logger.info(f"Commandline inputs: {args}")
+    
+    logger.info(f"Result to be saved at directory: {os.path.abspath(args.outdirpath)}")
+    os.makedirs(args.outdirpath, exist_ok=True)
     
     rngseed = args.rng_seed
     rngkeyseq = hk.PRNGSequence(jax.random.PRNGKey(rngseed))
@@ -153,6 +166,7 @@ def main(args):
         "BL": float(b_loss), 
         "Bg": float(bg), 
     }
+    logger.info(f"Finished generalisation error calculation: {json.dumps(result)}")
 
     if args.num_itemps is not None: 
         n = args.num_training_data
@@ -195,8 +209,9 @@ def main(args):
                 )
         if args.plot_rlct_regression:
             fig, ax = plot_rlct_regression(itemps, enlls, n)
-            filename = args.outfileprefix + "_rlct_regression.png"
-            fig.savefig(filename)
+            filename = "rlct_regression.png"
+            filepath = os.path.join(args.outdirpath, filename)
+            fig.savefig(filepath)
             logger.info(f"RLCT regression figure saved at: {filename}")
 
         slope, intercept, r_val, _, _ = scipy.stats.linregress(1 / itemps, enlls)
@@ -212,9 +227,10 @@ def main(args):
         }
     
     logger.info(json.dumps(result, indent=2))
-    outfilename = args.outfileprefix + ".json"
-    logger.info(f"Saving result JSON at: {outfilename}")
-    with open(outfilename, "w") as outfile:
+    outfilename = f"result_{args.num_training_data}_{args.rng_seed}.json"
+    outfilepath = os.path.join(args.outdirpath, outfilename)
+    logger.info(f"Saving result JSON at: {outfilepath}")
+    with open(outfilepath, "w") as outfile:
         json.dump(result, outfile) # no need for `indent` for such a small output. 
     return
 
@@ -272,10 +288,10 @@ if __name__ == "__main__":
         help="Number of host device for parallel run of MCMC chains.",
     )
     parser.add_argument(
-        "--outfileprefix",
+        "--outdirpath",
         default="result",
         type=str,
-        help="output filename prefix",
+        help="Path to output directory",
     )
     parser.add_argument(
         "--quiet", action="store_true", default=False, help="Lower verbosity level."
