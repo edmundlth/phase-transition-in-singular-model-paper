@@ -148,6 +148,7 @@ def main(args):
     )
 
     result = {
+        "rng_seed": args.rng_seed, 
         "n": args.num_training_data, 
         "BL": float(b_loss), 
         "Bg": float(bg), 
@@ -192,22 +193,27 @@ def main(args):
                 logger.info(
                     f"est. RLCT={slope:.3f}, energy={intercept / n:.3f}, r2={r_val**2:.3f}"
                 )
-        fig, ax = plot_rlct_regression(itemps, enlls, n)
-        fig.savefig(args.outfileprefix + "_rlct_regression.png")
+        if args.plot_rlct_regression:
+            fig, ax = plot_rlct_regression(itemps, enlls, n)
+            filename = args.outfileprefix + "_rlct_regression.png"
+            fig.savefig(filename)
+            logger.info(f"RLCT regression figure saved at: {filename}")
 
         slope, intercept, r_val, _, _ = scipy.stats.linregress(1 / itemps, enlls)
+        _map_float = lambda lst: list(map(float, lst)) # just to make sure things are json serialisable.
         result["rlct_estimation"] = {
             "n": n,
-            "itemps": [float(t) for t in itemps], 
-            "enlls": enlls,
-            "chain_stds": stds,
-            "slope": slope, 
-            "intercept": intercept,
-            "r^2": r_val**2,
+            "itemps": _map_float(itemps), 
+            "enlls": _map_float(enlls),
+            "chain_stds": _map_float(stds),
+            "slope": float(slope), 
+            "intercept": float(intercept),
+            "r^2": float(r_val**2),
         }
     
     logger.info(json.dumps(result, indent=2))
     outfilename = args.outfileprefix + ".json"
+    logger.info(f"Saving result JSON at: {outfilename}")
     with open(outfilename, "w") as outfile:
         json.dump(result, outfile) # no need for `indent` for such a small output. 
     return
@@ -223,6 +229,9 @@ if __name__ == "__main__":
     parser.add_argument("--num-chains", nargs="?", default=4, type=int)
     parser.add_argument("--num-training-data", nargs="?", default=1032, type=int)
     parser.add_argument("--num_itemps", nargs="?", default=None, type=int, help="If this is specified, the RLCT estimation procedure will be run.")
+    parser.add_argument(
+        "--plot_rlct_regression", action="store_true", default=False, help="If set, plot the RLCT regression figure."
+    )
     parser.add_argument(
         "--input_dim",
         nargs="?",
