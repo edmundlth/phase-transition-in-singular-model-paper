@@ -27,6 +27,7 @@ from src.haiku_numpyro_mlp import (
 from src.const import ACTIVATION_FUNC_SWITCH
 from src.utils import start_log, linspaced_itemps_by_n
 import logging
+import time
 
 
 def log_likelihood(forward_fn, param, x, y, sigma=1.0):
@@ -34,29 +35,20 @@ def log_likelihood(forward_fn, param, x, y, sigma=1.0):
     ydist = dist.Normal(y_hat, sigma)
     return ydist.log_prob(y)
 
-
 def compute_bayesian_loss(loglike_fn, X_test, Y_test, param_list):
-    bgs = []
-    for i in range(len(X_test)):
-        x = X_test[i]
-        y = Y_test[i]
-        lls = []
-        for j in range(len(param_list)):
-            param = param_list[j]
-            lls.append(loglike_fn(param, x, y))
-        bgs.append(-np.log(np.mean(np.exp(lls))))
-    bg = np.mean(bgs)
-    return bg
+    rec_array = jnp.hstack([loglike_fn(param, X_test, Y_test) for param in param_list])
+    result = jnp.mean(jnp.exp(rec_array), axis=1) # posterior predictive probability averaged over mcmc samples
+    result = jnp.mean(-jnp.log(result)) # negative log posterior, and averged over test samples
+    return result
 
 def compute_gibbs_loss(loglike_fn, X_test, Y_test, param_list):
-    # TODO: check and test. 
     gerrs = []
     for i in range(len(param_list)):
         param = param_list[i]
         gibbs_err = np.mean(loglike_fn(param, X_test, Y_test))
         gerrs.append(gibbs_err)
     gg = np.mean(gerrs)
-    return gg
+    return -gg
 
 
 def main(args):
@@ -153,18 +145,28 @@ def main(args):
     Y_test = generate_output_data(
         forward_true, true_param, X_test, next(rngkeyseq), sigma=args.sigma_obs
     )
-    b_loss = compute_bayesian_loss(loglike_fn, X_test, Y_test, param_list)
-    bg = b_loss + np.mean(
+        
+    gibbs_loss = compute_gibbs_loss(loglike_fn, X_test, Y_test, param_list)
+    logger.info(f"Gibbs loss: {gibbs_loss}")
+    bayes_loss = compute_bayesian_loss(loglike_fn, X_test, Y_test, param_list)
+    logger.info(f"Bayes loss: {bayes_loss}")
+
+    truth_entropy = - np.mean(
         log_likelihood(
             forward_true.apply, true_param, X_test, Y_test, sigma=args.sigma_obs
         )
     )
+    bayes_error = bayes_loss - truth_entropy
+    gibbs_error = gibbs_loss - truth_entropy
 
     result = {
         "rng_seed": args.rng_seed, 
         "n": args.num_training_data, 
-        "BL": float(b_loss), 
-        "Bg": float(bg), 
+        "BL": float(bayes_loss), 
+        "GL": float(gibbs_loss),
+        "Gg": float(gibbs_error),
+        "truth_entropy": float(truth_entropy),
+        "Bg": float(bayes_error),
     }
     logger.info(f"Finished generalisation error calculation: {json.dumps(result)}")
 
@@ -209,7 +211,7 @@ def main(args):
                 )
         if args.plot_rlct_regression:
             fig, ax = plot_rlct_regression(itemps, enlls, n)
-            filename = "rlct_regression.png"
+            filename = f"rlct_regression_{args.num_training_data}_{args.rng_seed}.png"
             filepath = os.path.join(args.outdirpath, filename)
             fig.savefig(filepath)
             logger.info(f"RLCT regression figure saved at: {filename}")
