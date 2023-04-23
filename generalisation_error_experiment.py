@@ -33,6 +33,8 @@ from src.utils import (
 )
 import logging
 
+logger = logging.getLogger("__main__")
+
 
 def log_likelihood(forward_fn, param, x, y, sigma=1.0):
     y_hat = forward_fn(param, None, x)
@@ -40,19 +42,10 @@ def log_likelihood(forward_fn, param, x, y, sigma=1.0):
     return ydist.log_prob(y)
 
 
-def main(args):
-    logger = start_log(None, loglevel=logging.DEBUG, log_name=__name__)
-    logger.info("Program starting...")
-    logger.info(f"Commandline inputs: {args}")
-
-    logger.info(f"Result to be saved at directory: {os.path.abspath(args.outdirpath)}")
-    os.makedirs(args.outdirpath, exist_ok=True)
-
-    rngseed = args.rng_seed
-    rngkeyseq = hk.PRNGSequence(jax.random.PRNGKey(rngseed))
-
+def load_synthetic_data(args, rngkey, generate_test_data=False):
+    rngkeyseq = hk.PRNGSequence(rngkey)
     # Construct true `forward_fn` and generate data X, Y
-    input_dim = 1
+    input_dim = args.input_dim
     X = generate_input_data(
         args.num_training_data, input_dim=input_dim, rng_key=next(rngkeyseq)
     )
@@ -79,8 +72,72 @@ def main(args):
         forward_true, true_param, X, next(rngkeyseq), sigma=args.sigma_obs
     )
 
-    # Construct `forward` for model, numpyro `model` and log_likelihood_fn
+    if generate_test_data:
+        X_test = generate_input_data(
+            args.num_test_samples, input_dim=args.input_dim, rng_key=next(rngkeyseq)
+        )
+        Y_test = generate_output_data(
+            forward_true, true_param, X_test, next(rngkeyseq), sigma=args.sigma_obs
+        )
+        return forward_true, true_param, X, Y, X_test, Y_test
+    else:
+        return forward_true, true_param, X, Y
 
+
+def load_data(file_path, train_size, test_size, random_seed=None):
+    # Load data from the .npz file
+    data = np.load(file_path)
+    X = data["X"]
+    Y = data["Y"]
+    
+    n = len(X)
+    assert n == len(Y), "Number of input samples is not the same as output samples."
+    assert n >= train_size + test_size, "Training dataset and test dataset is overlaping"
+
+    if random_seed is not None:
+        np.random.seed(random_seed)
+
+    # Shuffle the data using a random permutation
+    perm = np.random.permutation(len(X))
+    X = X[perm]
+    Y = Y[perm]
+
+    # Split the data into training and test sets
+    X_train, X_test = X[:train_size], X[-test_size:]
+    Y_train, Y_test = Y[:train_size], Y[-test_size:]
+
+    logger.info(f"X_train shape: {X_train.shape}")
+    logger.info(f"X_test shape: {X_test.shape}")
+    logger.info(f"y_train shape: {Y_train.shape}")
+    logger.info(f"y_test shape: {Y_test.shape}")
+    return X_train, Y_train, X_test, Y_test
+
+
+def main(args):
+    logger = start_log(None, loglevel=logging.DEBUG, log_name=__name__)
+    logger.info("Program starting...")
+    logger.info(f"Commandline inputs: {args}")
+
+    logger.info(f"Result to be saved at directory: {os.path.abspath(args.outdirpath)}")
+    os.makedirs(args.outdirpath, exist_ok=True)
+
+    rngseed = args.rng_seed
+    rngkeyseq = hk.PRNGSequence(jax.random.PRNGKey(rngseed))
+
+    if args.datafilepath is not None:
+        X, Y, X_test, Y_test = load_data(
+            args.datafilepath,
+            train_size=args.num_training_data,
+            test_size=args.num_test_samples,
+            random_seed=args.rng_seed,
+        )
+        forward_true, true_param = None, None
+    else:
+        forward_true, true_param, X, Y, X_test, Y_test = load_synthetic_data(
+            args, next(rngkeyseq), generate_test_data=True
+        )
+
+    # Construct `forward` for model, numpyro `model` and log_likelihood_fn
     forward = hk.transform(
         build_forward_fn(
             layer_sizes=args.layer_sizes,
@@ -128,13 +185,6 @@ def main(args):
         for i in range(num_mcmc_samples)
     ]
 
-    X_test = generate_input_data(
-        args.num_test_samples, input_dim=input_dim, rng_key=next(rngkeyseq)
-    )
-    Y_test = generate_output_data(
-        forward_true, true_param, X_test, next(rngkeyseq), sigma=args.sigma_obs
-    )
-
     gibbs_loss = compute_gibbs_loss(loglike_fn, X_test, Y_test, param_list)
     logger.info(f"Gibbs loss: {gibbs_loss}")
     gibbs_train_loss = compute_gibbs_loss(loglike_fn, X, Y, param_list)
@@ -145,14 +195,6 @@ def main(args):
     bayes_train_loss = compute_bayesian_loss(loglike_fn, X, Y, param_list)
     logger.info(f"Bayes train loss: {bayes_train_loss}")
 
-    truth_entropy = -np.mean(
-        log_likelihood(
-            forward_true.apply, true_param, X_test, Y_test, sigma=args.sigma_obs
-        )
-    )
-    bayes_error = bayes_loss - truth_entropy
-    gibbs_error = gibbs_loss - truth_entropy
-
     result = {
         "rng_seed": args.rng_seed,
         "n": args.num_training_data,
@@ -160,10 +202,18 @@ def main(args):
         "BLt": float(bayes_train_loss),
         "GL": float(gibbs_loss),
         "GLt": float(gibbs_train_loss),
-        "Gg": float(gibbs_error),
-        "truth_entropy": float(truth_entropy),
-        "Bg": float(bayes_error),
     }
+    if forward_true is not None and true_param is not None:
+        truth_entropy = -np.mean(
+            log_likelihood(
+                forward_true.apply, true_param, X_test, Y_test, sigma=args.sigma_obs
+            )
+        )
+        bayes_error = bayes_loss - truth_entropy
+        gibbs_error = gibbs_loss - truth_entropy
+        result["truth_entropy"] = float(truth_entropy)
+        result["Gg"] = float(gibbs_error)
+        result["Bg"] = float(bayes_error)
     logger.info(f"Finished generalisation error calculation: {json.dumps(result)}")
 
     if args.num_itemps is not None:
@@ -216,12 +266,13 @@ def main(args):
     outfilepath = os.path.join(args.outdirpath, outfilename)
     logger.info(f"Saving result JSON at: {outfilepath}")
     with open(outfilepath, "w") as outfile:
-        json.dump(result, outfile)  # no need for `indent` for such a small output.
+        json.dump(result, outfile, indent=2)
     return
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="RLCT estimation of MLP models.")
+    parser.add_argument("--datafilepath", nargs="?", default=None, type=str, help="Path to a .npz file storing data. If specified, --true_param_filepath, --true_layer_sizes, --with_true_bias etc are ignored.")
     parser.add_argument("--true_param_filepath", nargs="?", default=None, type=str)
     parser.add_argument("--num-test-samples", nargs="?", default=300, type=int)
     parser.add_argument("--num-posterior-samples", nargs="?", default=2000, type=int)
