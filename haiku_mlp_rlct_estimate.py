@@ -16,11 +16,10 @@ from src.haiku_numpyro_mlp import (
     generate_input_data,
     generate_output_data,
     build_model,
-    run_mcmc,
-    expected_nll,
+    rlct_estimate_regression,
 )
 from src.const import ACTIVATION_FUNC_SWITCH
-from src.utils import start_log
+from src.utils import start_log, MCMCConfig
 
 
 def main(args):
@@ -82,41 +81,21 @@ def main(args):
         args.num_itemps,
     )
     logger.info(f"itemps={itemps}")
-
-    enlls = []
-    for i_itemp, itemp in enumerate(itemps):
-        mcmc = run_mcmc(
-            model,
-            X,
-            Y,
-            next(rngkeyseq),
-            param_center,
-            num_posterior_samples=args.num_posterior_samples,
-            num_warmup=args.num_warmup,
-            num_chains=args.num_chains,
-            thinning=args.thinning,
-            itemp=itemp,
-            progress_bar=(not args.quiet),
-        )
-        posterior_samples = mcmc.get_samples()
-        num_mcmc_samples = num_mcmc_samples = len(
-            posterior_samples[list(posterior_samples.keys())[0]]
-        )
-        param_list = [
-            [posterior_samples[name][i] for name in sorted(posterior_samples.keys())]
-            for i in range(num_mcmc_samples)
-        ]
-        enll = expected_nll(log_likelihood_fn, map(treedef.unflatten, param_list), X, Y)
-        enlls.append(enll)
-        logger.info(f"Finished {i_itemp} temp={1/itemp:.3f}. Expected NLL={enll:.3f}")
-        if len(enlls) > 1:
-            slope, intercept, r_val, _, _ = scipy.stats.linregress(
-                1 / itemps[: len(enlls)], enlls
-            )
-            logger.info(
-                f"est. RLCT={slope:.3f}, energy={intercept / n:.3f}, r2={r_val**2:.3f}"
-            )
-
+    mcmc_config = MCMCConfig(
+        args.num_posterior_samples, args.num_warmup, args.num_chains, args.thinning
+    )
+    enlls, stds = rlct_estimate_regression(
+        itemps,
+        next(rngkeyseq),
+        model,
+        log_likelihood_fn,
+        X,
+        Y,
+        treedef,
+        param_center,
+        mcmc_config,
+        progress_bar=(not args.quiet),
+    )
     fig, ax = plt.subplots(figsize=(5, 5))
     slope, intercept, r_val, _, _ = scipy.stats.linregress(1 / itemps, enlls)
     ax.plot(1 / itemps, enlls, "kx")

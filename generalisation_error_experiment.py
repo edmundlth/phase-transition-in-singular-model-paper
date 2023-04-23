@@ -7,7 +7,6 @@ import scipy
 import haiku as hk
 import numpyro
 import numpyro.distributions as dist
-import matplotlib.pyplot as plt
 import json
 import pickle
 
@@ -21,13 +20,18 @@ from src.haiku_numpyro_mlp import (
     generate_output_data,
     run_mcmc,
     build_log_likelihood_fn,
-    chain_wise_enlls,
     plot_rlct_regression,
+    rlct_estimate_regression,
 )
 from src.const import ACTIVATION_FUNC_SWITCH
-from src.utils import start_log, linspaced_itemps_by_n
+from src.utils import (
+    start_log,
+    linspaced_itemps_by_n,
+    compute_bayesian_loss,
+    compute_gibbs_loss,
+    MCMCConfig,
+)
 import logging
-import time
 
 
 def log_likelihood(forward_fn, param, x, y, sigma=1.0):
@@ -35,30 +39,15 @@ def log_likelihood(forward_fn, param, x, y, sigma=1.0):
     ydist = dist.Normal(y_hat, sigma)
     return ydist.log_prob(y)
 
-def compute_bayesian_loss(loglike_fn, X_test, Y_test, param_list):
-    rec_array = jnp.hstack([loglike_fn(param, X_test, Y_test) for param in param_list])
-    result = jnp.mean(jnp.exp(rec_array), axis=1) # posterior predictive probability averaged over mcmc samples
-    result = jnp.mean(-jnp.log(result)) # negative log posterior, and averged over test samples
-    return result
-
-def compute_gibbs_loss(loglike_fn, X_test, Y_test, param_list):
-    gerrs = []
-    for i in range(len(param_list)):
-        param = param_list[i]
-        gibbs_err = np.mean(loglike_fn(param, X_test, Y_test))
-        gerrs.append(gibbs_err)
-    gg = np.mean(gerrs)
-    return -gg
-
 
 def main(args):
     logger = start_log(None, loglevel=logging.DEBUG, log_name=__name__)
     logger.info("Program starting...")
     logger.info(f"Commandline inputs: {args}")
-    
+
     logger.info(f"Result to be saved at directory: {os.path.abspath(args.outdirpath)}")
     os.makedirs(args.outdirpath, exist_ok=True)
-    
+
     rngseed = args.rng_seed
     rngkeyseq = hk.PRNGSequence(jax.random.PRNGKey(rngseed))
 
@@ -115,16 +104,16 @@ def main(args):
     loglike_fn = jax.jit(
         functools.partial(log_likelihood, forward.apply, sigma=args.sigma_obs)
     )
+    mcmc_config = MCMCConfig(
+        args.num_posterior_samples, args.num_warmup, args.num_chains, args.thinning
+    )
     mcmc = run_mcmc(
         model,
         X,
         Y,
         next(rngkeyseq),
         param_center,
-        num_posterior_samples=args.num_posterior_samples,
-        num_warmup=args.num_warmup,
-        num_chains=args.num_chains,
-        thinning=args.thinning,
+        mcmc_config,
         itemp=1.0,
         progress_bar=True,
     )
@@ -145,13 +134,18 @@ def main(args):
     Y_test = generate_output_data(
         forward_true, true_param, X_test, next(rngkeyseq), sigma=args.sigma_obs
     )
-        
+
     gibbs_loss = compute_gibbs_loss(loglike_fn, X_test, Y_test, param_list)
     logger.info(f"Gibbs loss: {gibbs_loss}")
+    gibbs_train_loss = compute_gibbs_loss(loglike_fn, X, Y, param_list)
+    logger.info(f"Gibbs train loss: {gibbs_train_loss}")
+
     bayes_loss = compute_bayesian_loss(loglike_fn, X_test, Y_test, param_list)
     logger.info(f"Bayes loss: {bayes_loss}")
+    bayes_train_loss = compute_bayesian_loss(loglike_fn, X, Y, param_list)
+    logger.info(f"Bayes train loss: {bayes_train_loss}")
 
-    truth_entropy = - np.mean(
+    truth_entropy = -np.mean(
         log_likelihood(
             forward_true.apply, true_param, X_test, Y_test, sigma=args.sigma_obs
         )
@@ -160,55 +154,42 @@ def main(args):
     gibbs_error = gibbs_loss - truth_entropy
 
     result = {
-        "rng_seed": args.rng_seed, 
-        "n": args.num_training_data, 
-        "BL": float(bayes_loss), 
+        "rng_seed": args.rng_seed,
+        "n": args.num_training_data,
+        "BL": float(bayes_loss),
+        "BLt": float(bayes_train_loss),
         "GL": float(gibbs_loss),
+        "GLt": float(gibbs_train_loss),
         "Gg": float(gibbs_error),
         "truth_entropy": float(truth_entropy),
         "Bg": float(bayes_error),
     }
     logger.info(f"Finished generalisation error calculation: {json.dumps(result)}")
 
-    if args.num_itemps is not None: 
+    if args.num_itemps is not None:
+        logger.info("Running RLCT estimation regression")
         n = args.num_training_data
         assert n == len(X)
         assert n == len(Y)
-        itemps = linspaced_itemps_by_n(args.num_training_data, num_itemps=args.num_itemps)
+        itemps = linspaced_itemps_by_n(
+            args.num_training_data, num_itemps=args.num_itemps
+        )
         logger.info(f"Sequence of itemps: {itemps}")
         log_likelihood_fn = functools.partial(
             build_log_likelihood_fn, forward.apply, sigma=args.sigma_obs
         )
-        enlls = []
-        stds = []
-        for i_itemp, itemp in enumerate(itemps):
-            mcmc = run_mcmc(
-                model,
-                X,
-                Y,
-                next(rngkeyseq),
-                param_center,
-                num_posterior_samples=args.num_posterior_samples,
-                num_warmup=args.num_warmup,
-                num_chains=args.num_chains,
-                thinning=args.thinning,
-                itemp=itemp,
-                progress_bar=(not args.quiet),
-            )
-            chain_enlls, chain_sizes = chain_wise_enlls(mcmc, treedef, log_likelihood_fn, X, Y)
-            enll = np.sum(np.array(chain_enlls) * np.array(chain_sizes)) / np.sum(chain_sizes)
-            chain_enlls_std = np.std(chain_enlls)
-            logger.info(f"Finished {i_itemp} temp={1/itemp:.3f}. Expected NLL={enll:.3f}")
-            logger.info(f"Across chain enll std: {chain_enlls_std}.")
-            enlls.append(enll)
-            stds.append(chain_enlls_std)
-            if len(enlls) > 1:
-                slope, intercept, r_val, _, _ = scipy.stats.linregress(
-                    1 / itemps[: len(enlls)], enlls
-                )
-                logger.info(
-                    f"est. RLCT={slope:.3f}, energy={intercept / n:.3f}, r2={r_val**2:.3f}"
-                )
+        enlls, stds = rlct_estimate_regression(
+            itemps,
+            next(rngkeyseq),
+            model,
+            log_likelihood_fn,
+            X,
+            Y,
+            treedef,
+            param_center,
+            mcmc_config,
+            progress_bar=(not args.quiet),
+        )
         if args.plot_rlct_regression:
             fig, ax = plot_rlct_regression(itemps, enlls, n)
             filename = f"rlct_regression_{args.num_training_data}_{args.rng_seed}.png"
@@ -217,23 +198,25 @@ def main(args):
             logger.info(f"RLCT regression figure saved at: {filename}")
 
         slope, intercept, r_val, _, _ = scipy.stats.linregress(1 / itemps, enlls)
-        _map_float = lambda lst: list(map(float, lst)) # just to make sure things are json serialisable.
+        _map_float = lambda lst: list(
+            map(float, lst)
+        )  # just to make sure things are json serialisable.
         result["rlct_estimation"] = {
             "n": n,
-            "itemps": _map_float(itemps), 
+            "itemps": _map_float(itemps),
             "enlls": _map_float(enlls),
             "chain_stds": _map_float(stds),
-            "slope": float(slope), 
+            "slope": float(slope),
             "intercept": float(intercept),
             "r^2": float(r_val**2),
         }
-    
+
     logger.info(json.dumps(result, indent=2))
     outfilename = f"result_{args.num_training_data}_{args.rng_seed}.json"
     outfilepath = os.path.join(args.outdirpath, outfilename)
     logger.info(f"Saving result JSON at: {outfilepath}")
     with open(outfilepath, "w") as outfile:
-        json.dump(result, outfile) # no need for `indent` for such a small output. 
+        json.dump(result, outfile)  # no need for `indent` for such a small output.
     return
 
 
@@ -246,9 +229,18 @@ if __name__ == "__main__":
     parser.add_argument("--num-warmup", nargs="?", default=500, type=int)
     parser.add_argument("--num-chains", nargs="?", default=4, type=int)
     parser.add_argument("--num-training-data", nargs="?", default=1032, type=int)
-    parser.add_argument("--num_itemps", nargs="?", default=None, type=int, help="If this is specified, the RLCT estimation procedure will be run.")
     parser.add_argument(
-        "--plot_rlct_regression", action="store_true", default=False, help="If set, plot the RLCT regression figure."
+        "--num_itemps",
+        nargs="?",
+        default=None,
+        type=int,
+        help="If this is specified, the RLCT estimation procedure will be run.",
+    )
+    parser.add_argument(
+        "--plot_rlct_regression",
+        action="store_true",
+        default=False,
+        help="If set, plot the RLCT regression figure.",
     )
     parser.add_argument(
         "--input_dim",
@@ -273,10 +265,16 @@ if __name__ == "__main__":
         help="Same as --layer_sizes for for the true model. If not specified, values for --layer_sizes are used. ",
     )
     parser.add_argument(
-        "--with_bias", action="store_true", default=False, help="If set, the model network will use bias parameters."
+        "--with_bias",
+        action="store_true",
+        default=False,
+        help="If set, the model network will use bias parameters.",
     )
     parser.add_argument(
-        "--with_true_bias", action="store_true", default=False, help="If set, the true network will use bias parameters."
+        "--with_true_bias",
+        action="store_true",
+        default=False,
+        help="If set, the true network will use bias parameters.",
     )
     parser.add_argument("--sigma-obs", nargs="?", default=0.1, type=float)
     parser.add_argument("--prior-std", nargs="?", default=3.0, type=float)
@@ -302,7 +300,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    
     if args.host_device_count is not None:
         numpyro.set_host_device_count(args.host_device_count)
     else:

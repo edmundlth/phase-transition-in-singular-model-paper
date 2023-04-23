@@ -12,9 +12,11 @@ import scipy
 import os
 import time
 import logging
+from src.utils import MCMCConfig
 
 # logger = logging.getLogger(__name__)
-logger = logging.getLogger("__main__")
+logger = logging.getLogger("__main__")  # TODO: Figure out these differences...
+
 
 def const_factorised_normal_prior(param_example, prior_mean=0.0, prior_std=1.0):
     """
@@ -61,7 +63,9 @@ def build_forward_fn(
         stddev=initialisation_std, mean=initialisation_mean
     )
     if with_bias:
-        b_initialiser = hk.initializers.RandomNormal(stddev=initialisation_std, mean=initialisation_mean)
+        b_initialiser = hk.initializers.RandomNormal(
+            stddev=initialisation_std, mean=initialisation_mean
+        )
     else:
         b_initialiser = None
 
@@ -125,16 +129,61 @@ def generate_output_data(foward_fn, param, X, rng_key, sigma=0.1):
     return Y
 
 
+def rlct_estimate_regression(
+    itemps,
+    rng_key,
+    model,
+    log_likelihood_fn,
+    X,
+    Y,
+    treedef,
+    param_center,
+    mcmc_config: MCMCConfig,
+    progress_bar=True,
+):
+    n = len(X)
+    enlls = []
+    stds = []
+    rngkeys = jax.random.split(rng_key, num=len(itemps))
+    for i_itemp, itemp in enumerate(itemps):
+        mcmc = run_mcmc(
+            model,
+            X,
+            Y,
+            rngkeys[i_itemp],
+            param_center,
+            mcmc_config,
+            itemp=itemp,
+            progress_bar=progress_bar,
+        )
+        chain_enlls, chain_sizes = chain_wise_enlls(
+            mcmc, treedef, log_likelihood_fn, X, Y
+        )
+        enll = np.sum(np.array(chain_enlls) * np.array(chain_sizes)) / np.sum(
+            chain_sizes
+        )
+        chain_enlls_std = np.std(chain_enlls)
+        logger.info(f"Finished {i_itemp} temp={1/itemp:.3f}. Expected NLL={enll:.3f}")
+        logger.info(f"Across chain enll std: {chain_enlls_std}.")
+        enlls.append(enll)
+        stds.append(chain_enlls_std)
+        if len(enlls) > 1:
+            slope, intercept, r_val, _, _ = scipy.stats.linregress(
+                1 / itemps[: len(enlls)], enlls
+            )
+            logger.info(
+                f"est. RLCT={slope:.3f}, energy={intercept / n:.3f}, r2={r_val**2:.3f}"
+            )
+    return enlls, stds
+
+
 def run_mcmc(
     model,
     X,
     Y,
     rng_key,
     param_center,
-    num_posterior_samples=2000,
-    num_warmup=1000,
-    num_chains=1,
-    thinning=1,
+    mcmc_config: MCMCConfig,
     itemp=1.0,
     progress_bar=True,
 ):
@@ -143,10 +192,10 @@ def run_mcmc(
     start_time = time.time()
     mcmc = numpyro.infer.MCMC(
         kernel,
-        num_samples=num_posterior_samples,
-        num_warmup=num_warmup,
-        num_chains=num_chains,
-        thinning=thinning,
+        num_samples=mcmc_config.num_posterior_samples,
+        num_warmup=mcmc_config.num_warmup,
+        num_chains=mcmc_config.num_chains,
+        thinning=mcmc_config.thinning,
         progress_bar=False if "NUMPYRO_SPHINXBUILD" in os.environ else progress_bar,
     )
     mcmc.run(rng_key, X, Y, param_center, itemp=itemp)
@@ -186,6 +235,7 @@ def chain_wise_enlls(mcmc, treedef, log_likelihood_fn, X, Y):
             f"Chain {chain_index} with size {chain_size} has enll {chain_enll}."
         )
     return chain_enlls, chain_sizes
+
 
 def plot_rlct_regression(itemps, enlls, n):
     fig, ax = plt.subplots(figsize=(5, 5))

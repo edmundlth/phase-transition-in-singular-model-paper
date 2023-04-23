@@ -12,7 +12,7 @@ import haiku as hk
 import numpyro
 
 from src.const import ACTIVATION_FUNC_SWITCH
-from src.utils import start_log
+from src.utils import start_log, MCMCConfig
 from src.haiku_numpyro_mlp import (
     build_forward_fn,
     build_log_likelihood_fn,
@@ -130,17 +130,19 @@ def main(expt_config, args):
 
     # Run MCMC sampling at the specified `itemp`
     itemp = expt_config["itemp"]
-    mcmc_config = expt_config["mcmc_config"]
+    mcmc_config = MCMCConfig(
+        expt_config["num_posterior_samples"],
+        expt_config["num_warmup"],
+        expt_config["num_chains"],
+        expt_config["thinning"],
+    )
     mcmc = run_mcmc(
         model,
         X,
         Y,
         next(rngkeyseq),
         param_center,
-        num_posterior_samples=mcmc_config["num_posterior_samples"],
-        num_warmup=mcmc_config["num_warmup"],
-        num_chains=mcmc_config["num_chains"],
-        thinning=mcmc_config["thinning"],
+        mcmc_config,
         itemp=itemp,
         progress_bar=(not args.quiet),
     )
@@ -257,7 +259,7 @@ if __name__ == "__main__":
     if args.device is not None:
         numpyro.set_platform(args.device)
     else:
-        numpyro.set_platform(jax_platform)    
+        numpyro.set_platform(jax_platform)
     print("jax backend:", jax_platform)
     print(f"JAX devices (num={jax.device_count()}): {jax.devices()}")
     main(expt_config, args)
