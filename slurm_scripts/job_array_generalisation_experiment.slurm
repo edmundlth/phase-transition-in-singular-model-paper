@@ -22,9 +22,9 @@
 # The maximum running time of the job in days-hours:mins:sec
 #SBATCH --time=0-05:00:00
 
-#SBATCH --output=genexpt/20230420_large_tanh_bias/slurm_%A_%a.out
-#SBATCH --error=genexpt/20230420_large_tanh_bias/slurm_%A_%a.err
-#SBATCH --array=100-2000:50
+#SBATCH --output=genexpt/20230423_wavy_data_relu/slurm_%A_%a.out
+#SBATCH --error=genexpt/20230423_wavy_data_relu/slurm_%A_%a.err
+#SBATCH --array=100-3000:50
 
 
 # check that the script is launched with sbatch
@@ -45,7 +45,12 @@ source /home/elau1/venv/bin/activate
 
 # The job command(s):
 NUMRNGSEEDS=5
-for seed in $(seq 1 $NUMRNGSEEDS); do python generalisation_error_experiment.py --outdirpath genexpt/20230420_large_tanh_bias/ --true_param_filepath test_1_25_25_15_1_tanh_bias_reg.pkl --true_layer_sizes 25 25 15 1 --layer_sizes 5 1 --with_true_bias --with_bias --num-training-data ${SLURM_ARRAY_TASK_ID} --num-test-samples 8034 --num-posterior-samples 6000 --thinning 3 --num-chains 8 --num-warmup 800 --rng-seed $(( ${SLURM_ARRAY_TASK_ID} + ${seed} )) --sigma-obs 0.3 --prior-std 5.0 --activation-fn-name tanh --num_itemps 4 --plot_rlct_regression ; done
+RNGSEEDS=$( seq ${SLURM_ARRAY_TASK_ID} $(( ${SLURM_ARRAY_TASK_ID} + ${NUMRNGSEEDS} )) )
+# DATAFILEPATH=None
+TRUEPARAMFILEPATH=1htanh0_5.pkl
+OUTPUTDIRPATH=genexpt/20230423_wavy_data_relu/
+
+python generalisation_error_experiment.py --outdirpath ${OUTPUTDIRPATH} --true_param_filepath ${TRUEPARAMFILEPATH} --true_layer_sizes 1 1 --layer_sizes 1 1 --num-training-data ${SLURM_ARRAY_TASK_ID} --num-test-samples 10123 --num-posterior-samples 5000 --thinning 3 --num-chains 8 --num-warmup 800 --rng-seeds ${RNGSEEDS} --sigma-obs 0.3 --prior-std 5.0 --activation-fn-name tanh --num_itemps 4 --plot_rlct_regression
 
 # deactivate virtualenv
 deactivate

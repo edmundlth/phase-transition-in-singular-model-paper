@@ -8,7 +8,6 @@ import jax.tree_util as jtree
 import pickle
 from src.const import ACTIVATION_FUNC_SWITCH
 from src.haiku_numpyro_mlp import build_forward_fn
-# from generalisation_error_experiment import commandline_parser, main
 import os
 from datetime import datetime
 import sys
@@ -88,25 +87,38 @@ def make_true_param(a, outputdir):
     return true_param_filepath
 
 
+def _make_cmd_arg(key, val):
+    if isinstance(val, list):
+        val = " ".join(map(str, val))
+        return f"--{key} {val}"
+    elif isinstance(val, bool):
+        if val: 
+            return f"--{key}"
+        else:
+            return ""
+    else:
+        return f"--{key} {val}"
+    
+
 if __name__ == "__main__":
     outputdir, index = sys.argv[1:3]
+    index = int(index)
     config = get_config_vals(index)
-    os.makedirs(outputdir, exist_ok=True)
-    input_dim = BASE_CONFIG["input_dim"]
-    true_layer_sizes = BASE_CONFIG["true_layer_sizes"]
-    activation_fn_name = BASE_CONFIG["activation_fn_name"]
-    prior_mean = BASE_CONFIG["prior_mean"]
 
-    a = config.pop('a')
-    true_param_filepath = make_true_param(a, outputdir)
+    output_subdir = os.path.join(outputdir, f"expt{index}")
+    os.makedirs(output_subdir, exist_ok=True)
     
-    now = datetime.now()
-    datetime_str = now.strftime("%Y%m%d%H%M%S")
+    a = config.pop('a')
+    print(f"a={a}")
+    true_param_filepath = make_true_param(a, output_subdir)
 
     cmd_list = ["python generalisation_error_experiment.py"]
-    cmd_list += [f"--true_param_filepath {true_param_filepath}"]
-    cmd_list += [f"--{key} {val}" for key, val in config.items()]
-    cmd_list += [f"--{key} {val}" for key, val in BASE_CONFIG.items()]
+    cmd_list += [
+        f"--true_param_filepath {true_param_filepath}", 
+        f"--outdirpath {output_subdir}"
+    ]
+    cmd_list += [_make_cmd_arg(key, val) for key, val in config.items()]
+    cmd_list += [_make_cmd_arg(key, val) for key, val in BASE_CONFIG.items()]
     command = " ".join(cmd_list)
 
     print("Constructed command: ")

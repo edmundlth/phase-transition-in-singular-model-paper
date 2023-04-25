@@ -20,11 +20,11 @@
 #SBATCH --mem=2048
 
 # The maximum running time of the job in days-hours:mins:sec
-#SBATCH --time=0-01:00:00
+#SBATCH --time=0-01:30:00
 
-#SBATCH --output=genexpt/slurm_%A_%a.out
-#SBATCH --error=genexpt/slurm_%A_%a.err
-#SBATCH --array=0-ENDINDEX
+#SBATCH --output=genexpt/1htanhsweep/slurm_%A_%a.out
+#SBATCH --error=genexpt/1htanhsweep/slurm_%A_%a.err
+#SBATCH --array=0-1399
 
 
 # check that the script is launched with sbatch
@@ -44,7 +44,7 @@ source /home/elau1/venv/bin/activate
 
 
 # The job command(s):
-OUTPUTDIR=./genexpt/20230425
+OUTPUTDIR=./genexpt/1htanhsweep/20230425/
 python slurmsweep_generror_expt.py ${OUTPUTDIR} ${SLURM_ARRAY_TASK_ID}
 
 # deactivate virtualenv
