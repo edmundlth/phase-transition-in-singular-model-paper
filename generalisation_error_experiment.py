@@ -47,7 +47,7 @@ def load_synthetic_data(args, rngkey, generate_test_data=False):
     # Construct true `forward_fn` and generate data X, Y
     input_dim = args.input_dim
     X = generate_input_data(
-        args.num_training_data, input_dim=input_dim, rng_key=next(rngkeyseq)
+        args.num_training_data, input_dim=input_dim, rng_key=next(rngkeyseq), xmin=-1.0, xmax=1.0
     )
     forward_true = hk.transform(
         build_forward_fn(
@@ -120,23 +120,6 @@ def main(args):
 
     logger.info(f"Result to be saved at directory: {os.path.abspath(args.outdirpath)}")
     os.makedirs(args.outdirpath, exist_ok=True)
-
-    rngseed = args.rng_seed
-    rngkeyseq = hk.PRNGSequence(jax.random.PRNGKey(rngseed))
-
-    if args.datafilepath is not None:
-        X, Y, X_test, Y_test = load_data(
-            args.datafilepath,
-            train_size=args.num_training_data,
-            test_size=args.num_test_samples,
-            random_seed=args.rng_seed,
-        )
-        forward_true, true_param = None, None
-    else:
-        forward_true, true_param, X, Y, X_test, Y_test = load_synthetic_data(
-            args, next(rngkeyseq), generate_test_data=True
-        )
-
     # Construct `forward` for model, numpyro `model` and log_likelihood_fn
     forward = hk.transform(
         build_forward_fn(
@@ -147,9 +130,6 @@ def main(args):
             with_bias=args.with_bias,
         )
     )
-    init_param = forward.init(next(rngkeyseq), X)
-    _, treedef = jtree.tree_flatten(init_param)
-    param_center = init_param
     model = functools.partial(
         build_model,
         forward.apply,
@@ -157,129 +137,150 @@ def main(args):
         prior_std=args.prior_std,
         sigma=args.sigma_obs,
     )
-
     loglike_fn = jax.jit(
         functools.partial(log_likelihood, forward.apply, sigma=args.sigma_obs)
     )
     mcmc_config = MCMCConfig(
         args.num_posterior_samples, args.num_warmup, args.num_chains, args.thinning
     )
-    mcmc = run_mcmc(
-        model,
-        X,
-        Y,
-        next(rngkeyseq),
-        param_center,
-        mcmc_config,
-        itemp=1.0,
-        progress_bar=True,
-    )
-    posterior_samples = mcmc.get_samples()
-    num_mcmc_samples = posterior_samples[list(posterior_samples.keys())[0]].shape[0]
-    logger.info(f"Num mcmc samples={num_mcmc_samples}")
 
-    param_list = [
-        treedef.unflatten(
-            [posterior_samples[name][i] for name in sorted(posterior_samples.keys())]
-        )
-        for i in range(num_mcmc_samples)
-    ]
+    for rngseed in args.rng_seeds:
+        rngkeyseq = hk.PRNGSequence(jax.random.PRNGKey(rngseed))
 
-    gibbs_loss = compute_gibbs_loss(loglike_fn, X_test, Y_test, param_list)
-    logger.info(f"Gibbs loss: {gibbs_loss}")
-    gibbs_train_loss = compute_gibbs_loss(loglike_fn, X, Y, param_list)
-    logger.info(f"Gibbs train loss: {gibbs_train_loss}")
-
-    bayes_loss = compute_bayesian_loss(loglike_fn, X_test, Y_test, param_list)
-    logger.info(f"Bayes loss: {bayes_loss}")
-    bayes_train_loss = compute_bayesian_loss(loglike_fn, X, Y, param_list)
-    logger.info(f"Bayes train loss: {bayes_train_loss}")
-
-    result = {
-        "rng_seed": args.rng_seed,
-        "n": args.num_training_data,
-        "BL": float(bayes_loss),
-        "BLt": float(bayes_train_loss),
-        "GL": float(gibbs_loss),
-        "GLt": float(gibbs_train_loss),
-    }
-    if forward_true is not None and true_param is not None:
-        truth_entropy = -np.mean(
-            log_likelihood(
-                forward_true.apply, true_param, X_test, Y_test, sigma=args.sigma_obs
+        if args.datafilepath is not None:
+            X, Y, X_test, Y_test = load_data(
+                args.datafilepath,
+                train_size=args.num_training_data,
+                test_size=args.num_test_samples,
+                random_seed=rngseed,
             )
-        )
-        bayes_error = bayes_loss - truth_entropy
-        gibbs_error = gibbs_loss - truth_entropy
-        result["truth_entropy"] = float(truth_entropy)
-        result["Gg"] = float(gibbs_error)
-        result["Bg"] = float(bayes_error)
-    logger.info(f"Finished generalisation error calculation: {json.dumps(result)}")
-
-    if args.num_itemps is not None:
-        logger.info("Running RLCT estimation regression")
-        n = args.num_training_data
-        assert n == len(X)
-        assert n == len(Y)
-        itemps = linspaced_itemps_by_n(
-            args.num_training_data, num_itemps=args.num_itemps
-        )
-        logger.info(f"Sequence of itemps: {itemps}")
-        log_likelihood_fn = functools.partial(
-            build_log_likelihood_fn, forward.apply, sigma=args.sigma_obs
-        )
-        enlls, stds = rlct_estimate_regression(
-            itemps,
-            next(rngkeyseq),
+            forward_true, true_param = None, None
+        else:
+            forward_true, true_param, X, Y, X_test, Y_test = load_synthetic_data(
+                args, next(rngkeyseq), generate_test_data=True
+            )
+        
+        init_param = forward.init(next(rngkeyseq), X)
+        _, treedef = jtree.tree_flatten(init_param)
+        param_center = init_param
+        mcmc = run_mcmc(
             model,
-            log_likelihood_fn,
             X,
             Y,
-            treedef,
+            next(rngkeyseq),
             param_center,
             mcmc_config,
-            progress_bar=(not args.quiet),
+            itemp=1.0,
+            progress_bar=True,
         )
-        if args.plot_rlct_regression:
-            fig, ax = plot_rlct_regression(itemps, enlls, n)
-            filename = f"rlct_regression_{args.num_training_data}_{args.rng_seed}.png"
-            filepath = os.path.join(args.outdirpath, filename)
-            fig.savefig(filepath)
-            logger.info(f"RLCT regression figure saved at: {filename}")
+        posterior_samples = mcmc.get_samples()
+        num_mcmc_samples = posterior_samples[list(posterior_samples.keys())[0]].shape[0]
+        logger.info(f"Num mcmc samples={num_mcmc_samples}")
 
-        slope, intercept, r_val, _, _ = scipy.stats.linregress(1 / itemps, enlls)
-        _map_float = lambda lst: list(
-            map(float, lst)
-        )  # just to make sure things are json serialisable.
-        result["rlct_estimation"] = {
-            "n": n,
-            "itemps": _map_float(itemps),
-            "enlls": _map_float(enlls),
-            "chain_stds": _map_float(stds),
-            "slope": float(slope),
-            "intercept": float(intercept),
-            "r^2": float(r_val**2),
+        param_list = [
+            treedef.unflatten(
+                [posterior_samples[name][i] for name in sorted(posterior_samples.keys())]
+            )
+            for i in range(num_mcmc_samples)
+        ]
+
+        gibbs_loss = compute_gibbs_loss(loglike_fn, X_test, Y_test, param_list)
+        logger.info(f"Gibbs loss: {gibbs_loss}")
+        gibbs_train_loss = compute_gibbs_loss(loglike_fn, X, Y, param_list)
+        logger.info(f"Gibbs train loss: {gibbs_train_loss}")
+
+        bayes_loss = compute_bayesian_loss(loglike_fn, X_test, Y_test, param_list)
+        logger.info(f"Bayes loss: {bayes_loss}")
+        bayes_train_loss = compute_bayesian_loss(loglike_fn, X, Y, param_list)
+        logger.info(f"Bayes train loss: {bayes_train_loss}")
+
+        result = {
+            "rng_seed": rngseed,
+            "n": args.num_training_data,
+            "BL": float(bayes_loss),
+            "BLt": float(bayes_train_loss),
+            "GL": float(gibbs_loss),
+            "GLt": float(gibbs_train_loss),
         }
+        if forward_true is not None and true_param is not None:
+            truth_entropy = -np.mean(
+                log_likelihood(
+                    forward_true.apply, true_param, X_test, Y_test, sigma=args.sigma_obs
+                )
+            )
+            bayes_error = bayes_loss - truth_entropy
+            gibbs_error = gibbs_loss - truth_entropy
+            result["truth_entropy"] = float(truth_entropy)
+            result["Gg"] = float(gibbs_error)
+            result["Bg"] = float(bayes_error)
+        logger.info(f"Finished generalisation error calculation: {json.dumps(result)}")
+        # Saving the result first. 
+        # If the RLCT estimation parts run, it will overwrite the file with more data. 
+        outfilepath = os.path.join(args.outdirpath, f"result_{args.num_training_data}_{rngseed}.json")
+        with open(outfilepath, "w") as outfile:
+            json.dump(result, outfile, indent=2)
 
-    logger.info(json.dumps(result, indent=2))
-    outfilename = f"result_{args.num_training_data}_{args.rng_seed}.json"
-    outfilepath = os.path.join(args.outdirpath, outfilename)
-    logger.info(f"Saving result JSON at: {outfilepath}")
-    with open(outfilepath, "w") as outfile:
-        json.dump(result, outfile, indent=2)
+        if args.num_itemps is not None:
+            # Run RLCT estimation regression. 
+            n = args.num_training_data
+            assert n == len(X)
+            assert n == len(Y)
+            itemps = linspaced_itemps_by_n(
+                args.num_training_data, num_itemps=args.num_itemps
+            )
+            log_likelihood_fn = functools.partial(
+                build_log_likelihood_fn, forward.apply, sigma=args.sigma_obs
+            )
+            enlls, stds = rlct_estimate_regression(
+                itemps,
+                next(rngkeyseq),
+                model,
+                log_likelihood_fn,
+                X,
+                Y,
+                treedef,
+                param_center,
+                mcmc_config,
+                progress_bar=(not args.quiet),
+            )
+            if args.plot_rlct_regression:
+                fig, _ = plot_rlct_regression(itemps, enlls, n)
+                filepath = os.path.join(args.outdirpath, f"rlct_regression_{args.num_training_data}_{rngseed}.png")
+                fig.savefig(filepath)
+                logger.info(f"RLCT regression figure saved at: {filepath}")
+
+            slope, intercept, r_val, _, _ = scipy.stats.linregress(1 / itemps, enlls)
+            _map_float = lambda lst: list(
+                map(float, lst)
+            )  # just to make sure things are json serialisable.
+            result["rlct_estimation"] = {
+                "n": n,
+                "itemps": _map_float(itemps),
+                "enlls": _map_float(enlls),
+                "chain_stds": _map_float(stds),
+                "slope": float(slope),
+                "intercept": float(intercept),
+                "r^2": float(r_val**2),
+            }
+
+        logger.info(json.dumps(result, indent=2))
+        outfilepath = os.path.join(args.outdirpath, f"result_{args.num_training_data}_{rngseed}.json")
+        logger.info(f"Saving result JSON at: {outfilepath}")
+        with open(outfilepath, "w") as outfile:
+            json.dump(result, outfile, indent=2)
     return
 
+def commandline_parser():
+    parser = argparse.ArgumentParser(description="")
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="RLCT estimation of MLP models.")
     parser.add_argument("--datafilepath", nargs="?", default=None, type=str, help="Path to a .npz file storing data. If specified, --true_param_filepath, --true_layer_sizes, --with_true_bias etc are ignored.")
     parser.add_argument("--true_param_filepath", nargs="?", default=None, type=str)
-    parser.add_argument("--num-test-samples", nargs="?", default=300, type=int)
-    parser.add_argument("--num-posterior-samples", nargs="?", default=2000, type=int)
+    parser.add_argument("--num_test_samples", nargs="?", default=300, type=int)
+    parser.add_argument("--num_posterior_samples", nargs="?", default=2000, type=int)
     parser.add_argument("--thinning", nargs="?", default=4, type=int)
-    parser.add_argument("--num-warmup", nargs="?", default=500, type=int)
-    parser.add_argument("--num-chains", nargs="?", default=4, type=int)
-    parser.add_argument("--num-training-data", nargs="?", default=1032, type=int)
+    parser.add_argument("--num_warmup", nargs="?", default=500, type=int)
+    parser.add_argument("--num_chains", nargs="?", default=4, type=int)
+    parser.add_argument("--num_training_data", nargs="?", default=1032, type=int)
     parser.add_argument(
         "--num_itemps",
         nargs="?",
@@ -327,10 +328,10 @@ if __name__ == "__main__":
         default=False,
         help="If set, the true network will use bias parameters.",
     )
-    parser.add_argument("--sigma-obs", nargs="?", default=0.1, type=float)
-    parser.add_argument("--prior-std", nargs="?", default=3.0, type=float)
-    parser.add_argument("--prior-mean", nargs="?", default=0.0, type=float)
-    parser.add_argument("--activation-fn-name", nargs="?", default="tanh", type=str)
+    parser.add_argument("--sigma_obs", nargs="?", default=0.1, type=float)
+    parser.add_argument("--prior_std", nargs="?", default=3.0, type=float)
+    parser.add_argument("--prior_mean", nargs="?", default=0.0, type=float)
+    parser.add_argument("--activation_fn_name", nargs="?", default="tanh", type=str)
     parser.add_argument("--device", default=None, type=str, help='use "cpu" or "gpu".')
     parser.add_argument(
         "--host_device_count",
@@ -347,8 +348,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--quiet", action="store_true", default=False, help="Lower verbosity level."
     )
-    parser.add_argument("--rng-seed", nargs="?", default=42, type=int)
+    parser.add_argument("--rng_seeds", nargs="+", default=[42], type=int)
+    return parser
 
+if __name__ == "__main__":
+    parser = commandline_parser()
     args = parser.parse_args()
 
     if args.host_device_count is not None:

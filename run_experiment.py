@@ -130,12 +130,7 @@ def main(expt_config, args):
 
     # Run MCMC sampling at the specified `itemp`
     itemp = expt_config["itemp"]
-    mcmc_config = MCMCConfig(
-        expt_config["num_posterior_samples"],
-        expt_config["num_warmup"],
-        expt_config["num_chains"],
-        expt_config["thinning"],
-    )
+    mcmc_config = MCMCConfig(**expt_config["mcmc_config"])
     mcmc = run_mcmc(
         model,
         X,

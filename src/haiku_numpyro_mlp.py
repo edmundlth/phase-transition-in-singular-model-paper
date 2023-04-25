@@ -141,6 +141,8 @@ def rlct_estimate_regression(
     mcmc_config: MCMCConfig,
     progress_bar=True,
 ):
+    logger.info("Running RLCT estimation regression")
+    logger.info(f"Sequence of itemps: {itemps}")
     n = len(X)
     enlls = []
     stds = []
