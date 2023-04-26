@@ -1,6 +1,13 @@
 import logging
 import sys
+import jax.numpy as jnp
 import numpy as np
+from collections import namedtuple
+
+MCMCConfig = namedtuple(
+    "MCMCConfig", ["num_posterior_samples", "num_warmup", "num_chains", "thinning"]
+)
+
 
 def start_log(logfile=None, loglevel=logging.INFO, log_name=None, log_to_stdout=True):
     """
@@ -31,22 +38,25 @@ def start_log(logfile=None, loglevel=logging.INFO, log_name=None, log_to_stdout=
     """
     if log_name is None:
         log_name = __name__
+    print(f"LOGGER NAME: {log_name}")
     logger = logging.getLogger(log_name)
     logger.setLevel(loglevel)
 
     # Define the logging format
-    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", "%Y-%m-%d %H:%M:%S")
+    formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(message)s", "%Y-%m-%d %H:%M:%S"
+    )
     if logfile is not None:
         # Set up a file handler for logging to a file
         fh = logging.FileHandler(logfile)
-        fh.setLevel(logging.DEBUG)
+        fh.setLevel(loglevel)
         fh.setFormatter(formatter)
         logger.addHandler(fh)
 
     if log_to_stdout:
         # Set up a stream handler for logging to the console
         ch = logging.StreamHandler(sys.stdout)
-        ch.setLevel(logging.INFO)
+        ch.setLevel(loglevel)
         ch.setFormatter(formatter)
         logger.addHandler(ch)
     return logger
@@ -78,3 +88,24 @@ def linspaced_itemps_by_n(n, num_itemps):
         1 / np.log(n) * (1 + 1 / np.sqrt(2 * np.log(n))),
         num_itemps,
     )
+
+
+def compute_bayesian_loss(loglike_fn, X_test, Y_test, param_list):
+    rec_array = jnp.hstack([loglike_fn(param, X_test, Y_test) for param in param_list])
+    result = jnp.mean(
+        jnp.exp(rec_array), axis=1
+    )  # posterior predictive probability averaged over mcmc samples
+    result = jnp.mean(
+        -jnp.log(result)
+    )  # negative log posterior, and averged over test samples
+    return result
+
+
+def compute_gibbs_loss(loglike_fn, X_test, Y_test, param_list):
+    gerrs = []
+    for i in range(len(param_list)):
+        param = param_list[i]
+        gibbs_err = np.mean(loglike_fn(param, X_test, Y_test))
+        gerrs.append(gibbs_err)
+    gg = np.mean(gerrs)
+    return -gg
