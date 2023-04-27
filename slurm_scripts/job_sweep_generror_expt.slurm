@@ -17,14 +17,14 @@
 #SBATCH --cpus-per-task=6
 
 # The amount of memory in megabytes per node:
-#SBATCH --mem=8192
+#SBATCH --mem=4096
 
 # The maximum running time of the job in days-hours:mins:sec
-#SBATCH --time=0-01:30:00
+#SBATCH --time=0-02:00:00
 
 #SBATCH --output=genexpt/1htanhsweep/slurm_%A_%a.out
 #SBATCH --error=genexpt/1htanhsweep/slurm_%A_%a.err
-#SBATCH --array=0-1799
+#SBATCH --array=0-449
 
 
 # check that the script is launched with sbatch
@@ -44,7 +44,7 @@ source /home/elau1/venv/bin/activate
 
 
 # The job command(s):
-OUTPUTDIR=./genexpt/1htanhsweep/20230426/
+OUTPUTDIR=./genexpt/1htanhsweep/20230427/
 mkdir -p ${OUTPUTDIR}
 python slurmsweep_generror_expt.py ${OUTPUTDIR} ${SLURM_ARRAY_TASK_ID}
 

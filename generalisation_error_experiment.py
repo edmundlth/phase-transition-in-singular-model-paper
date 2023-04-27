@@ -249,6 +249,12 @@ def main(args, rngseed):
         result["truth_entropy_train"] = float(truth_entropy_train)
         result["Gg"] = float(gibbs_error)
         result["Bg"] = float(bayes_error)
+
+        if not args.no_true_param_output:
+            # store the true parameter as list of lists. 
+            true_param_list, _ = jtree.tree_flatten(true_param)
+            result["true_param"] = [np.array(p).tolist() for p in true_param_list]
+
     logger.info(f"Finished generalisation error calculation: {json.dumps(result)}")
     # Saving the result first. 
     # If the RLCT estimation parts run, it will overwrite the file with more data. 
@@ -388,6 +394,9 @@ def commandline_parser():
     parser.add_argument(
         "--no_wbic", action="store_true", default=False, help="If specified, the WBIC will NOT be calculated."
     )
+    parser.add_argument(
+        "--no_true_param_output", action="store_true", default=False, help="If specified, the true parameters will NOT be in the result JSON file."
+    )
     parser.add_argument("--rng_seeds", nargs="+", default=[42], type=int)
     return parser
 
@@ -416,5 +425,6 @@ if __name__ == "__main__":
     logger.info(f"Result to be saved at directory: {os.path.abspath(args.outdirpath)}")
     os.makedirs(args.outdirpath, exist_ok=True)
     
-    for rngseed in args.rng_seeds:
+    for i, rngseed in enumerate(args.rng_seeds):
+        logger.info(f"Starting experiment {i} of {len(args.rng_seeds)} with rngseed: {rngseed}")
         main(args, rngseed)

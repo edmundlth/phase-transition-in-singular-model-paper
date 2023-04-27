@@ -13,10 +13,10 @@ from datetime import datetime
 import sys
 
 
-NSTART = 100
-NEND = 20000
-NUMRNGSEEDS = 100
 # expt on 20230425
+# NSTART = 50
+# NEND = 20000
+# NUMRNGSEEDS = 20
 # CONFIG_RANGES = dict(
 #     a=[0.1, 0.3, 0.5, 0.7, 0.9, 1.1],
 #     num_training_data=[
@@ -27,14 +27,34 @@ NUMRNGSEEDS = 100
 # )
 
 # expt on 20230426
+# NSTART = 100
+# NEND = 20000
+# NUMRNGSEEDS = 100
+# CONFIG_RANGES = dict(
+#     a=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+#     num_training_data=[10, 30, 50, 70, 90] + [
+#         int(n) for n in np.logspace(np.log10(NSTART), np.log10(NEND), base=10, num=20)
+#     ],
+#     sigma_obs=[0.1, 1.0],
+#     prior_std=[0.1, 5.0],
+#     prior_mean=[0.0, 0.6, 1.0], 
+# )
+
+# expt on 20230427
+NSTART = 100
+NEND = 5000
+NUMRNGSEEDS = 50
+XMIN, XMAX = -3, 3
 CONFIG_RANGES = dict(
-    a=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
-    num_training_data=[10, 30, 50, 70, 90] + [
-        int(n) for n in np.logspace(np.log10(NSTART), np.log10(NEND), base=10, num=20)
+    a = [
+    [[[3.0, -.7]], [[1.0], [1.0]]],
+    [[[2.0, -.7]], [[0.3], [.4]]], 
+    [[[5.0, -.5]], [[0.3], [.2]]]
     ],
-    sigma_obs=[0.1, 1.0],
-    prior_std=[0.1, 5.0],
-    prior_mean=[0.0, 0.6, 1.0], 
+    num_training_data=[10, 30, 50, 70, 90] + list(map(int, np.linspace(NSTART, NEND, num=20))),
+    sigma_obs=[0.1, 0.3, 0.5],
+    prior_std=[1.0, 10.0],
+    prior_mean=[0.0], 
 )
 
 
@@ -46,13 +66,13 @@ BASE_CONFIG = {
     # "prior_std": None,
     "rng_seeds": list(range(NUMRNGSEEDS)),
     "input_dim": 1,
-    # "num_itemps": 4,
-    "true_layer_sizes": [1, 1],
-    "layer_sizes": [1, 1],
-    "num_posterior_samples": 5000,
-    "thinning": 4,
+    # "num_itemps": 4, # commenting out will disable rlct estimation.
+    "true_layer_sizes": [2, 1],
+    "layer_sizes": [2, 1],
+    "num_posterior_samples": 3000,
+    "thinning": 3,
     "num_chains": 6,
-    "num_warmup": 800,
+    "num_warmup": 500,
     "num_test_samples": 10123,
     "host_device_count": 6,
     "plot_rlct_regression": True,
@@ -90,7 +110,10 @@ def make_true_param(a, outputdir):
     rngkey = jax.random.PRNGKey(0)
     dummy_X = jax.random.uniform(rngkey, shape=(5, input_dim))
     _, true_treedef = jtree.tree_flatten(forward_true.init(rngkey, dummy_X))
-    true_param = true_treedef.unflatten([jnp.array([[a]]), jnp.array([[a]]).T])
+    if isinstance(a, float):
+        true_param = true_treedef.unflatten([jnp.array([[a]]), jnp.array([[a]]).T])
+    elif isinstance(a, list):
+        true_param = true_treedef.unflatten([jnp.array(elem) for elem in a])
     true_param_filepath = os.path.join(outputdir, "true_param.pkl")
     print(f"Saving true parameter pickle file at: {true_param_filepath}")
     with open(true_param_filepath, "wb") as f:
