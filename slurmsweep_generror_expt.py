@@ -41,8 +41,24 @@ import sys
 # )
 
 # expt on 20230427
-NSTART = 100
-NEND = 5000
+# NSTART = 100
+# NEND = 5000
+# NUMRNGSEEDS = 50
+# XMIN, XMAX = -3, 3
+# CONFIG_RANGES = dict(
+#     a = [
+#     [[[3.0, -.7]], [[1.0], [1.0]]],
+#     [[[2.0, -.7]], [[0.3], [.4]]], 
+#     [[[5.0, -.5]], [[0.3], [.2]]]
+#     ],
+#     num_training_data=[10, 30, 50, 70, 90] + list(map(int, np.linspace(NSTART, NEND, num=20))),
+#     sigma_obs=[0.1, 0.3, 0.5],
+#     prior_std=[1.0, 10.0],
+#     prior_mean=[0.0], 
+# )
+
+
+# expt on 20230430
 NUMRNGSEEDS = 50
 XMIN, XMAX = -3, 3
 CONFIG_RANGES = dict(
@@ -51,11 +67,12 @@ CONFIG_RANGES = dict(
     [[[2.0, -.7]], [[0.3], [.4]]], 
     [[[5.0, -.5]], [[0.3], [.2]]]
     ],
-    num_training_data=[10, 30, 50, 70, 90] + list(map(int, np.linspace(NSTART, NEND, num=20))),
+    num_training_data=list(map(int, np.linspace(10, 500, num=30))),
     sigma_obs=[0.1, 0.3, 0.5],
     prior_std=[1.0, 10.0],
     prior_mean=[0.0], 
 )
+
 
 
 BASE_CONFIG = {
