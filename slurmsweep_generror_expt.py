@@ -59,18 +59,30 @@ import sys
 
 
 # expt on 20230430
+# NUMRNGSEEDS = 50
+# XMIN, XMAX = -3, 3
+# CONFIG_RANGES = dict(
+#     a = [
+#     [[[3.0, -.7]], [[1.0], [1.0]]],
+#     [[[2.0, -.7]], [[0.3], [.4]]], 
+#     [[[5.0, -.5]], [[0.3], [.2]]]
+#     ],
+#     num_training_data=list(map(int, np.linspace(10, 500, num=30))),
+#     sigma_obs=[0.1, 0.3, 0.5],
+#     prior_std=[1.0, 10.0],
+#     prior_mean=[0.0], 
+# )
+
+
+# expt on 20230502
+NSTART = 50
+NEND = 1000
 NUMRNGSEEDS = 50
-XMIN, XMAX = -3, 3
 CONFIG_RANGES = dict(
-    a = [
-    [[[3.0, -.7]], [[1.0], [1.0]]],
-    [[[2.0, -.7]], [[0.3], [.4]]], 
-    [[[5.0, -.5]], [[0.3], [.2]]]
-    ],
-    num_training_data=list(map(int, np.linspace(10, 500, num=30))),
-    sigma_obs=[0.1, 0.3, 0.5],
-    prior_std=[1.0, 10.0],
-    prior_mean=[0.0], 
+    a=[0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.1],
+    num_training_data=list(map(int, np.linspace(NSTART, NEND, num=25))),
+    sigma_obs=[0.1, 0.5, 1.0],
+    prior_std=[10.0],
 )
 
 
@@ -84,8 +96,8 @@ BASE_CONFIG = {
     "rng_seeds": list(range(NUMRNGSEEDS)),
     "input_dim": 1,
     # "num_itemps": 4, # commenting out will disable rlct estimation.
-    "true_layer_sizes": [2, 1],
-    "layer_sizes": [2, 1],
+    "true_layer_sizes": [1, 1],
+    "layer_sizes": [1, 1],
     "num_posterior_samples": 3000,
     "thinning": 3,
     "num_chains": 6,
