@@ -19,6 +19,7 @@ torchensemble = "*"
 jax = {extras = ["cpu"], version = "*"}
 dm-haiku = "*"
 optax = "*"
+funsor = "*"
 
 [dev-packages]
 black = "*"

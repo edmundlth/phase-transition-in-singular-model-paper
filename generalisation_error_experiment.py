@@ -127,20 +127,13 @@ def main(args, rngseed):
             with_bias=args.with_bias,
         )
     )
-    model = functools.partial(
-        build_model,
-        forward.apply,
-        prior_mean=args.prior_mean,
-        prior_std=args.prior_std,
-        sigma=args.sigma_obs,
-    )
+
     loglike_fn = jax.jit(
         functools.partial(log_likelihood, forward.apply, sigma=args.sigma_obs)
     )
     mcmc_config = MCMCConfig(
         args.num_posterior_samples, args.num_warmup, args.num_chains, args.thinning
     )
-
     rngkeyseq = hk.PRNGSequence(jax.random.PRNGKey(rngseed))
     if args.datafilepath is not None:
         X, Y, X_test, Y_test = load_data(
@@ -158,12 +151,18 @@ def main(args, rngseed):
     init_param = forward.init(next(rngkeyseq), X)
     _, treedef = jtree.tree_flatten(init_param)
     param_center = init_param
+    model = functools.partial(
+        build_model,
+        forward.apply,
+        param_center=param_center,
+        prior_mean=args.prior_mean,
+        prior_std=args.prior_std,
+        sigma=args.sigma_obs,
+    )
     mcmc = run_mcmc(
         model,
-        X,
-        Y,
+        [X, Y],
         next(rngkeyseq),
-        param_center,
         mcmc_config,
         itemp=1.0,
         progress_bar=(not args.quiet),
@@ -212,10 +211,8 @@ def main(args, rngseed):
         itemp = 1 / np.log(args.num_training_data)
         tempered_mcmc = run_mcmc(
             model,
-            X,
-            Y,
+            [X, Y],
             next(rngkeyseq),
-            param_center,
             mcmc_config,
             itemp=itemp,
             progress_bar=(not args.quiet),
