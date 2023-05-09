@@ -229,7 +229,7 @@ if __name__ == "__main__":
     parser.add_argument("--sigma", nargs="?", default=1.0, type=float)
     parser.add_argument("--prior_std", nargs="?", default=10.0, type=float)
     parser.add_argument("--prior_mean", nargs="?", default=0.0, type=float)
-    parser.add_argument("--alpha", nargs="?", default=0.0, type=float, help="Parameter for Dirichlet distribution as prior for mixture weights.")
+    parser.add_argument("--alpha", nargs="?", default=0.3, type=float, help="Parameter for Dirichlet distribution as prior for mixture weights.")
     
     parser.add_argument("--device", default=None, type=str, help='use "cpu" or "gpu".')
     parser.add_argument(
