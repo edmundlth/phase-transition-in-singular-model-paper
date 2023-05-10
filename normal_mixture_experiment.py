@@ -14,6 +14,11 @@ import json
 from src.utils import (
     start_log,
     MCMCConfig,
+    compute_bayesian_loss, 
+    compute_functional_variance, 
+    compute_gibbs_loss, 
+    compute_waic, 
+    compute_wbic
 )
 from src.haiku_numpyro_mlp import (
     run_mcmc,
@@ -53,34 +58,6 @@ def _compute_loglike_array(loglike_fn, data, posterior_param_list):
         [loglike_fn(param, data) for param in posterior_param_list]
     )
     return loglike_array
-
-def compute_bayesian_loss(loglike_array):
-    # dimension = (num test samples, num mcmc samples)
-    num_mcmc_samples = loglike_array.shape[1]
-    result = -np.mean(logsumexp(loglike_array, b=1 / num_mcmc_samples, axis=1))
-    return result
-
-def compute_gibbs_loss(loglike_array):
-    # gerrs = []
-    # for param in posterior_param_list:
-    #     gibbs_err = np.mean(loglike_fn(param, data))
-    #     gerrs.append(gibbs_err)
-    gerrs = np.mean(loglike_array, axis=0)
-    gg = np.mean(gerrs)
-    return -gg
-
-
-def compute_functional_variance(loglike_array):
-    # variance over posterior samples and averaged over dataset.
-    # V = 1/n \sum_{i=1}^n Var_w(\log p(X_i | w))
-    result = np.mean(np.var(loglike_array, axis=0))
-    return result
-
-
-def compute_waic(loglike_array):
-    func_var = compute_functional_variance(loglike_array)
-    bayes_train_loss = compute_bayesian_loss(loglike_array)
-    return bayes_train_loss + func_var
 
 
 def log_likelihood_func(params, data, component_dim, sigma=1.0):

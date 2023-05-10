@@ -178,22 +178,32 @@ def main(args, rngseed):
         for i in range(num_mcmc_samples)
     ]
 
-    gibbs_loss = compute_gibbs_loss(loglike_fn, X_test, Y_test, param_list)
-    logger.info(f"Gibbs loss: {gibbs_loss}")
     
-    gibbs_train_loss = compute_gibbs_loss(loglike_fn, X, Y, param_list)
-    logger.info(f"Gibbs train loss: {gibbs_train_loss}")
+    loglike_array = np.hstack(# dimension = (num test samples, num mcmc samples)
+        [loglike_fn(param, X_test, Y_test) for param in param_list]
+    )
+    gibbs_loss = compute_gibbs_loss(loglike_array)
+    logger.info(f"Gibbs loss: {gibbs_loss}")
 
-    bayes_loss = compute_bayesian_loss(loglike_fn, X_test, Y_test, param_list)
+    bayes_loss = compute_bayesian_loss(loglike_array)
     logger.info(f"Bayes loss: {bayes_loss}")
     
-    bayes_train_loss = compute_bayesian_loss(loglike_fn, X, Y, param_list)
+    # This is loglikelihood array for training data now. 
+    # It overwrites the previous loglike_array to free up memory.
+    loglike_array = np.hstack( 
+        [loglike_fn(param, X, Y) for param in param_list]
+    )
+    
+    gibbs_train_loss = compute_gibbs_loss(loglike_array)
+    logger.info(f"Gibbs train loss: {gibbs_train_loss}")
+
+    bayes_train_loss = compute_bayesian_loss(loglike_array)
     logger.info(f"Bayes train loss: {bayes_train_loss}")
 
-    func_var = compute_functional_variance(loglike_fn, X, Y, param_list)
+    func_var = compute_functional_variance(loglike_array)
     logger.info(f"Functional Variance: {func_var}")
 
-    waic = compute_waic(loglike_fn, X, Y, param_list)
+    waic = compute_waic(loglike_array)
     logger.info(f"WAIC: {waic}")
     result = {
         "commandline_args": vars(args), 
@@ -225,7 +235,12 @@ def main(args, rngseed):
             )
             for i in range(num_mcmc_samples)
         ]
-        wbic = compute_wbic(loglike_fn, X, Y, tempered_posterior_param_list)
+        # this is now a tempered loglikelihood array on training data. 
+        # Again, this overwrites the previous variable to save memory. 
+        loglike_array = np.hstack( 
+            [loglike_fn(param, X, Y) for param in tempered_posterior_param_list]
+        )
+        wbic = compute_wbic(loglike_array)
         result["WBIC"] = float(wbic)
         logger.info(f"WBIC: {wbic}")
 

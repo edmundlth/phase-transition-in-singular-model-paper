@@ -90,45 +90,32 @@ def linspaced_itemps_by_n(n, num_itemps):
         num_itemps,
     )
 
-
-def compute_bayesian_loss(loglike_fn, X_test, Y_test, posterior_param_list):
-    # dimension = (num test samples, num mcmc samples)
-    loglike_array = np.hstack(
-        [loglike_fn(param, X_test, Y_test) for param in posterior_param_list]
-    )
+# dimension of `loglike_array` in all the following functions are 
+# (num data samples X, num mcmc sampled parameters w)
+def compute_bayesian_loss(loglike_array):
     num_mcmc_samples = loglike_array.shape[1]
     result = -np.mean(logsumexp(loglike_array, b=1 / num_mcmc_samples, axis=1))
     return result
 
 
-def compute_gibbs_loss(loglike_fn, X_test, Y_test, posterior_param_list):
-    gerrs = []
-    for param in posterior_param_list:
-        gibbs_err = np.mean(loglike_fn(param, X_test, Y_test))
-        gerrs.append(gibbs_err)
+def compute_gibbs_loss(loglike_array):
+    gerrs = np.mean(loglike_array, axis=0)
     gg = np.mean(gerrs)
     return -gg
 
 
-def compute_functional_variance(loglike_fn, X, Y, posterior_param_list):
-    loglike_array = np.hstack(
-        [loglike_fn(param, X, Y) for param in posterior_param_list]
-    )
+def compute_functional_variance(loglike_array):
     # variance over posterior samples and averaged over dataset.
     # V = 1/n \sum_{i=1}^n Var_w(\log p(X_i | w))
-    result = np.mean(np.var(loglike_array, axis=0))
+    result = np.mean(np.var(loglike_array, axis=1))
     return result
 
 
-def compute_waic(loglike_fn, X, Y, posterior_param_list):
-    func_var = compute_functional_variance(loglike_fn, X, Y, posterior_param_list)
-    bayes_train_loss = compute_bayesian_loss(loglike_fn, X, Y, posterior_param_list)
+def compute_waic(loglike_array):
+    func_var = compute_functional_variance(loglike_array)
+    bayes_train_loss = compute_bayesian_loss(loglike_array)
     return bayes_train_loss + func_var
 
 
-def compute_wbic(loglike_fn, X, Y, tempered_posterior_param_list):
-    # dimension = (num test samples, num mcmc samples)
-    loglike_array = np.hstack(
-        [loglike_fn(param, X, Y) for param in tempered_posterior_param_list]
-    )
-    return -np.mean(np.sum(loglike_array, axis=0))
+def compute_wbic(tempered_loglike_array):
+    return -np.mean(np.sum(tempered_loglike_array, axis=0))
