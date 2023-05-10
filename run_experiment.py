@@ -123,6 +123,7 @@ def main(expt_config, args):
     model = functools.partial(
         build_model,
         forward.apply,
+        param_center=param_center,
         prior_mean=prior_mean,
         prior_std=prior_std,
         sigma=sigma_obs,
@@ -133,10 +134,8 @@ def main(expt_config, args):
     mcmc_config = MCMCConfig(**expt_config["mcmc_config"])
     mcmc = run_mcmc(
         model,
-        X,
-        Y,
+        [X, Y],
         next(rngkeyseq),
-        param_center,
         mcmc_config,
         itemp=itemp,
         progress_bar=(not args.quiet),

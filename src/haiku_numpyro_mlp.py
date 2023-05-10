@@ -137,7 +137,6 @@ def rlct_estimate_regression(
     X,
     Y,
     treedef,
-    param_center,
     mcmc_config: MCMCConfig,
     progress_bar=True,
 ):
@@ -150,10 +149,8 @@ def rlct_estimate_regression(
     for i_itemp, itemp in enumerate(itemps):
         mcmc = run_mcmc(
             model,
-            X,
-            Y,
+            [X, Y],
             rngkeys[i_itemp],
-            param_center,
             mcmc_config,
             itemp=itemp,
             progress_bar=progress_bar,
@@ -181,11 +178,10 @@ def rlct_estimate_regression(
 
 def run_mcmc(
     model,
-    X,
-    Y,
+    data,
     rng_key,
-    param_center,
     mcmc_config: MCMCConfig,
+    init_params=None,
     itemp=1.0,
     progress_bar=True,
 ):
@@ -200,7 +196,17 @@ def run_mcmc(
         thinning=mcmc_config.thinning,
         progress_bar=False if "NUMPYRO_SPHINXBUILD" in os.environ else progress_bar,
     )
-    mcmc.run(rng_key, X, Y, param_center, itemp=itemp)
+    assert (
+        (isinstance(data, list) and len(data) == 2) 
+        or isinstance(data, np.ndarray) 
+        or isinstance(data, jnp.ndarray)
+    ), "data is either [X, Y] or just X"
+
+    if isinstance(data, list):
+        X, Y = data
+        mcmc.run(rng_key, X, Y, itemp=itemp, init_params=init_params)
+    else:
+        mcmc.run(rng_key, data, itemp=itemp, init_params=init_params)
     logger.info(
         f"Finished running MCMC. Time taken: {time.time() - start_time:.3f} seconds"
     )

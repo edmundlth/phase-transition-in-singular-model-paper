@@ -20,11 +20,11 @@
 #SBATCH --mem=4096
 
 # The maximum running time of the job in days-hours:mins:sec
-#SBATCH --time=0-02:00:00
+#SBATCH --time=0-01:00:00
 
-#SBATCH --output=genexpt/1htanhsweep/slurm_%A_%a.out
-#SBATCH --error=genexpt/1htanhsweep/slurm_%A_%a.err
-#SBATCH --array=0-449
+#SBATCH --output=nmm_expt/slurm_%A_%a.out
+#SBATCH --error=nmm_expt/slurm_%A_%a.err
+#SBATCH --array=10-1300:10
 
 
 # check that the script is launched with sbatch
@@ -44,9 +44,12 @@ source /home/elau1/venv/bin/activate
 
 
 # The job command(s):
-OUTPUTDIR=./genexpt/1htanhsweep/20230427/
-mkdir -p ${OUTPUTDIR}
-python slurmsweep_generror_expt.py ${OUTPUTDIR} ${SLURM_ARRAY_TASK_ID}
+NUMRNGSEEDS=50
+RNGSEEDS=$( seq 1 ${NUMRNGSEEDS} )
+OUTPUTDIRPATH=nmm_expt/20230509/
+HOSTDEVICECOUNT=6
+DELTA=0.5
+python normal_mixture_experiment.py --outdirpath ${OUTPUTDIRPATH} --num_training_data ${SLURM_ARRAY_TASK_ID} --delta ${DELTA} --num_chains ${HOSTDEVICECOUNT} --host_device_count ${HOSTDEVICECOUNT} --rng_seeds ${RNGSEEDS}
 
 # deactivate virtualenv
 deactivate
