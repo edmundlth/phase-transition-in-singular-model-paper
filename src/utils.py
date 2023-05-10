@@ -1,6 +1,14 @@
 import logging
 import sys
+import jax.numpy as jnp
 import numpy as np
+from collections import namedtuple
+from scipy.special import logsumexp
+
+MCMCConfig = namedtuple(
+    "MCMCConfig", ["num_posterior_samples", "num_warmup", "num_chains", "thinning"]
+)
+
 
 def start_log(logfile=None, loglevel=logging.INFO, log_name=None, log_to_stdout=True):
     """
@@ -31,22 +39,25 @@ def start_log(logfile=None, loglevel=logging.INFO, log_name=None, log_to_stdout=
     """
     if log_name is None:
         log_name = __name__
+    print(f"LOGGER NAME: {log_name}")
     logger = logging.getLogger(log_name)
     logger.setLevel(loglevel)
 
     # Define the logging format
-    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", "%Y-%m-%d %H:%M:%S")
+    formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(message)s", "%Y-%m-%d %H:%M:%S"
+    )
     if logfile is not None:
         # Set up a file handler for logging to a file
         fh = logging.FileHandler(logfile)
-        fh.setLevel(logging.DEBUG)
+        fh.setLevel(loglevel)
         fh.setFormatter(formatter)
         logger.addHandler(fh)
 
     if log_to_stdout:
         # Set up a stream handler for logging to the console
         ch = logging.StreamHandler(sys.stdout)
-        ch.setLevel(logging.INFO)
+        ch.setLevel(loglevel)
         ch.setFormatter(formatter)
         logger.addHandler(ch)
     return logger
@@ -78,3 +89,33 @@ def linspaced_itemps_by_n(n, num_itemps):
         1 / np.log(n) * (1 + 1 / np.sqrt(2 * np.log(n))),
         num_itemps,
     )
+
+# dimension of `loglike_array` in all the following functions are 
+# (num data samples X, num mcmc sampled parameters w)
+def compute_bayesian_loss(loglike_array):
+    num_mcmc_samples = loglike_array.shape[1]
+    result = -np.mean(logsumexp(loglike_array, b=1 / num_mcmc_samples, axis=1))
+    return result
+
+
+def compute_gibbs_loss(loglike_array):
+    gerrs = np.mean(loglike_array, axis=0)
+    gg = np.mean(gerrs)
+    return -gg
+
+
+def compute_functional_variance(loglike_array):
+    # variance over posterior samples and averaged over dataset.
+    # V = 1/n \sum_{i=1}^n Var_w(\log p(X_i | w))
+    result = np.mean(np.var(loglike_array, axis=1))
+    return result
+
+
+def compute_waic(loglike_array):
+    func_var = compute_functional_variance(loglike_array)
+    bayes_train_loss = compute_bayesian_loss(loglike_array)
+    return bayes_train_loss + func_var
+
+
+def compute_wbic(tempered_loglike_array):
+    return -np.mean(np.sum(tempered_loglike_array, axis=0))

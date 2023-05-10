@@ -9,7 +9,7 @@ from src.const import ACTIVATION_FUNC_SWITCH
 from src.utils import linspaced_itemps_by_n
 
 
-def generate_configs_ns(partial_config, ns):
+def vary_configs_ns(partial_config, ns):
     configs = []
     for n in ns:
         new_config = copy.deepcopy(partial_config)
@@ -17,13 +17,21 @@ def generate_configs_ns(partial_config, ns):
         configs.append(new_config)
     return configs
 
-def generate_configs_itemps(partial_config, num_itemps):
+def vary_configs_itemps(partial_config, num_itemps):
     configs = []
     n = partial_config["num_training_data"]
     itemps = linspaced_itemps_by_n(n, num_itemps)
     for itemp in itemps:
         new_config = copy.deepcopy(partial_config)
         new_config["itemp"] = itemp
+        configs.append(new_config)
+    return configs
+
+def vary_configs_rngseed(partial_config, rng_seed_list):
+    configs = []
+    for seed in rng_seed_list:
+        new_config = copy.deepcopy(partial_config)
+        new_config["rng_seed"] = seed
         configs.append(new_config)
     return configs
 
@@ -35,6 +43,7 @@ def generate_config_realisable_1hltanh_expt(
     true_param_filepath: str,
     sigma_obs: float,
     input_dim: int, 
+    true_layer_sizes: List[int],
     layer_sizes: List[int],
     prior_mean: float,
     prior_std: float,
@@ -58,7 +67,7 @@ def generate_config_realisable_1hltanh_expt(
         "truth": {
             "model_type": "mlp",
             "model_args": {
-                "layer_sizes": layer_sizes,
+                "layer_sizes": true_layer_sizes,
                 "with_bias": False,
                 "activation_fn_name": "tanh",
                 "sigma_obs": sigma_obs,
@@ -113,56 +122,119 @@ def generate_random_param(
 
 
 if __name__ == "__main__":
-    import sys
     import pickle
     import os
-    rng_seed = sys.argv[1]
-    layer_sizes = [4, 1]
-    input_dim = 1
-    prior_std = 2.0
-    rand_param = generate_random_param(4, [3, 1], 1, 0.0, prior_std)
+    import argparse
+    import shutil
 
-    print(rand_param)
-    # Save the parameter tree to a file
-    now = datetime.datetime.now()
-    suffix = now.strftime("%Y%m%d%H%M%S")
-    str_layer_size = '_'.join([str(s) for s in layer_sizes])
-
-    outdirpath = "./curated_experiments/energy_entropy_trend_in_n/experiment_configs/"
-
-    filepath = os.path.join(
-        outdirpath,
-        f"params_{input_dim}_{str_layer_size}_{suffix}.pkl"
+    parser = argparse.ArgumentParser(
+        description="Generate a JSON list of experiment configurations according to commandline specification."
     )
+    parser.add_argument(
+        "--true_param_filepath",
+        default=None,
+        type=str,
+        help="Path to a .pkl (pickle) file containing the parameter dictionary of the true parameter. If specified, the true parameter won't be generated anew.",
+    )
+    parser.add_argument(
+        "--expt_name",
+        default=None,
+        type=str,
+        help="A string to specify a name to give the experiment configurations. If not provided a new on is auto generated.",
+    )
+    parser.add_argument("--num_training_data_list", nargs="+", required=True, type=int)
+    parser.add_argument(
+        "--rng_seed_list", 
+        nargs="+",
+        required=True, 
+        type=int, 
+        help="A list of PRNG seeds for each repetitions of the experiments."
+    )
+    parser.add_argument("--input_dim", nargs="?", default=1, type=int, help="Dimension of the input data X.")
+    parser.add_argument(
+        "--layer_sizes",
+        nargs="+",
+        type=int,
+        help="A list of positive integers specifying MLP layers sizes from the first non-input layer up to and including the output layer. ",
+    )
+    parser.add_argument(
+        "--true_layer_sizes",
+        nargs="+",
+        type=int,
+        default=None,
+        help="Same as --layer_sizes for for the true model. If not specified, values for --layer_sizes are used. ",
+    )
+    parser.add_argument("--sigma_obs", nargs="?", default=0.1, type=float)
+    parser.add_argument("--prior_std", nargs="?", default=1.0, type=float)
+    parser.add_argument("--prior_mean", nargs="?", default=0.0, type=float)
+    parser.add_argument("--activation_fn_name", nargs="?", default="tanh", type=str)
+    parser.add_argument("--num_itemps", nargs="?", default=6, type=int)
+    parser.add_argument("--num_posterior_samples", nargs="?", default=2000, type=int)
+    parser.add_argument("--thinning", nargs="?", default=1, type=int)
+    parser.add_argument("--num_warmup", nargs="?", default=500, type=int)
+    parser.add_argument("--num_chains", nargs="?", default=1, type=int)
+    parser.add_argument(
+        "--output_dir",
+        required=True, 
+        type=str,
+        help="a directory for storing generated configurations and true parameter files.",
+    )
+    args = parser.parse_args()
+    os.makedirs(args.output_dir, exist_ok=True)
+    true_layer_sizes = args.true_layer_sizes if args.true_layer_sizes is not None else args.layer_sizes
+    if args.true_param_filepath is None:    
+        true_param = generate_random_param(
+            args.rng_seed_list[-1], true_layer_sizes, args.input_dim, args.prior_mean, args.prior_std
+        )
+        print(f"Generated new true parameter: {true_param}")
+    
+        # Save the new true parameter tree to a file
+        str_layer_size = '_'.join([str(s) for s in true_layer_sizes])
+        true_param_filepath = os.path.join(
+            args.output_dir, 
+            f"params_{args.input_dim}_{str_layer_size}.pkl"
+        )
+        with open(true_param_filepath, 'wb') as f:
+             pickle.dump(true_param, f)
+    else:
+        # Copy the specified file to the output directory. 
+        true_param_filepath = os.path.join(
+            args.output_dir, 
+            os.path.basename(args.true_param_filepath)
+        )
+        print(f"True parameter file path specified. Copying {args.true_param_filepath} to {true_param_filepath}")
+        shutil.copy(args.true_param_filepath, true_param_filepath)
 
-    with open(filepath, 'wb') as f:
-        pickle.dump(rand_param, f)
+    expt_name = args.expt_name if args.expt_name is not None else "expt"
 
     partial_config = generate_config_realisable_1hltanh_expt(
-        expt_name="one_hidden_layer_tanh_h=4", 
-        rng_seed=rng_seed, 
-        itemp=1.0, 
-        num_training_data=1234, 
-        true_param_filepath=filepath, 
-        sigma_obs=0.1, 
-        input_dim=1, 
-        layer_sizes=layer_sizes, 
-        prior_mean=0.0, 
-        prior_std=prior_std, 
-        num_posterior_samples=2000, 
-        num_warmup=1000, 
-        num_chains=10, 
-        thinning=4, 
-        use_datetimesuffix=True
+        expt_name=expt_name, 
+        rng_seed=args.rng_seed_list[0], 
+        itemp=1.0, # dummy value for now.
+        num_training_data=args.num_training_data_list[0], 
+        true_param_filepath=true_param_filepath, 
+        sigma_obs=args.sigma_obs, 
+        input_dim=args.input_dim, 
+        true_layer_sizes=true_layer_sizes,
+        layer_sizes=args.layer_sizes,
+        prior_mean=args.prior_mean, 
+        prior_std=args.prior_std, 
+        num_posterior_samples=args.num_posterior_samples, 
+        num_warmup=args.num_warmup, 
+        num_chains=args.num_chains, 
+        thinning=args.thinning
     )
-    config_list = generate_configs_itemps(partial_config, 10)
+    config_list = vary_configs_ns(partial_config, args.num_training_data_list)
+    config_list = sum(
+        [vary_configs_rngseed(partial_config, args.rng_seed_list) 
+         for partial_config in config_list], []
+    )
+    config_list = sum(
+        [vary_configs_itemps(partial_config, args.num_itemps) for partial_config in config_list], []
+    )
+    print(f"Number of experiment configs: {len(config_list)}")
 
-    filepath = os.path.join(outdirpath, "config_list.json")
+    filepath = os.path.join(args.output_dir, f"config_list.json")
     with open(filepath, "w") as outfile:
         json.dump(config_list, outfile, indent=4)
-    
-
-
-
-
     
