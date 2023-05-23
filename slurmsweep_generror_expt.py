@@ -74,7 +74,18 @@ import sys
 # )
 
 
-# expt on 20230502
+# expt on 20230503
+# NSTART = 50
+# NEND = 1000
+# NUMRNGSEEDS = 50
+# CONFIG_RANGES = dict(
+#     a=[0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.1],
+#     num_training_data=list(map(int, np.linspace(NSTART, NEND, num=25))),
+#     sigma_obs=[0.1, 0.5, 1.0],
+#     prior_std=[10.0],
+# )
+
+# expt on 20230504
 NSTART = 50
 NEND = 1000
 NUMRNGSEEDS = 50
